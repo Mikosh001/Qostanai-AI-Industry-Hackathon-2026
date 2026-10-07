@@ -1,0 +1,28 @@
+{
+  "health": {
+    "ok": true,
+    "version": "1.4.2",
+    "setup_required": false
+  },
+  "mode": "strict",
+  "protection_enabled": true,
+  "manual_challenge_present": false,
+  "lab_processes": {
+    "db": {
+      "alive": true,
+      "job": false
+    },
+    "php": {
+      "alive": true,
+      "job": false
+    },
+    "tls": {
+      "alive": true,
+      "job": false
+    },
+    "hub": {
+      "alive": true,
+      "job": false
+    }
+  }
+}

@@ -1,0 +1,42 @@
+{
+  "dataset": "COCO128 public labelled phone samples; not an exam-environment accuracy benchmark",
+  "phone_samples": [
+    {
+      "file": "000000000328.jpg",
+      "phone_detected": true,
+      "confidence": 0.25910550355911255,
+      "faces": 0,
+      "inference_ms": 265.6
+    },
+    {
+      "file": "000000000387.jpg",
+      "phone_detected": false,
+      "confidence": 0,
+      "faces": 0,
+      "inference_ms": 172.2
+    },
+    {
+      "file": "000000000395.jpg",
+      "phone_detected": true,
+      "confidence": 0.42455318570137024,
+      "faces": 1,
+      "inference_ms": 186.4
+    },
+    {
+      "file": "000000000536.jpg",
+      "phone_detected": false,
+      "confidence": 0,
+      "faces": 1,
+      "inference_ms": 185.8
+    },
+    {
+      "file": "000000000560.jpg",
+      "phone_detected": false,
+      "confidence": 0,
+      "faces": 0,
+      "inference_ms": 184.3
+    }
+  ],
+  "portrait_faces": 1,
+  "portrait_source": "https://storage.googleapis.com/mediapipe-assets/portrait.jpg"
+}

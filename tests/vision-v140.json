@@ -1,0 +1,94 @@
+{
+  "scope": "Reproducible labelled-image checks; not webcam accuracy or physical replay proof.",
+  "phone_threshold": 0.3,
+  "phone_model": "yolo11s.onnx",
+  "phone_positive_images": 5,
+  "positive_detected": 4,
+  "phone_negative_images": 121,
+  "negative_false_detections": 0,
+  "positives": [
+    {
+      "file": "000000000328.jpg",
+      "label": true,
+      "detected": true,
+      "score": 0.5883
+    },
+    {
+      "file": "000000000387.jpg",
+      "label": true,
+      "detected": true,
+      "score": 0.5195
+    },
+    {
+      "file": "000000000395.jpg",
+      "label": true,
+      "detected": true,
+      "score": 0.4769
+    },
+    {
+      "file": "000000000536.jpg",
+      "label": true,
+      "detected": true,
+      "score": 0.3754
+    },
+    {
+      "file": "000000000560.jpg",
+      "label": true,
+      "detected": false,
+      "score": 0
+    }
+  ],
+  "false_detections": [],
+  "missing_dataset_images": 2,
+  "spoof_source": "https://github.com/yakhyo/face-anti-spoofing/tree/main/assets",
+  "spoof_images": [
+    {
+      "file": "image_F1.jpg",
+      "sha256": "4b11b5d7a8a8e4a88f5f16a5426a0a7692e39e5bb45bb03b4ebe5e1606336860",
+      "expected": "spoof",
+      "faces": 1,
+      "presentation": {
+        "state": "spoof",
+        "score": 0.0188,
+        "scores": [
+          0.0007,
+          0.0368
+        ],
+        "sample_at": 18178.39,
+        "model": "MiniFASNetV2+V1SE"
+      }
+    },
+    {
+      "file": "image_F2.jpg",
+      "sha256": "fbbea73450ae9d9bb555c8ccac77bf39d234261fe3be4190e3ed2999690c485f",
+      "expected": "spoof",
+      "faces": 1,
+      "presentation": {
+        "state": "spoof",
+        "score": 0.2147,
+        "scores": [
+          0.0039,
+          0.4256
+        ],
+        "sample_at": 18178.421,
+        "model": "MiniFASNetV2+V1SE"
+      }
+    },
+    {
+      "file": "image_T1.jpg",
+      "sha256": "f4455149f488f76205fdee5499ec5261d08ef6279a1cff7b778ea85405331e94",
+      "expected": "live",
+      "faces": 1,
+      "presentation": {
+        "state": "live",
+        "score": 0.9731,
+        "scores": [
+          0.9764,
+          0.9698
+        ],
+        "sample_at": 18178.453,
+        "model": "MiniFASNetV2+V1SE"
+      }
+    }
+  ]
+}

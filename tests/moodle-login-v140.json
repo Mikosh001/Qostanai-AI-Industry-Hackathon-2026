@@ -1,0 +1,322 @@
+[
+  {
+    "iteration": 1,
+    "ok": true,
+    "url": "/my/",
+    "trace": [
+      {
+        "path": "/login/index.php",
+        "method": "GET",
+        "status": 200,
+        "requestSid": "e3b0c442",
+        "setSids": [
+          "f0c928dd"
+        ]
+      },
+      {
+        "path": "/login/index.php",
+        "method": "POST",
+        "status": 303,
+        "requestSid": "f0c928dd",
+        "setSids": [
+          "279f30c0"
+        ]
+      },
+      {
+        "path": "/login/index.php",
+        "method": "GET",
+        "status": 303,
+        "requestSid": "279f30c0",
+        "setSids": []
+      }
+    ]
+  },
+  {
+    "iteration": 2,
+    "ok": true,
+    "url": "/my/",
+    "trace": [
+      {
+        "path": "/login/index.php",
+        "method": "GET",
+        "status": 200,
+        "requestSid": "e3b0c442",
+        "setSids": [
+          "9a722caf"
+        ]
+      },
+      {
+        "path": "/login/index.php",
+        "method": "POST",
+        "status": 303,
+        "requestSid": "9a722caf",
+        "setSids": [
+          "70ed7fb0"
+        ]
+      },
+      {
+        "path": "/login/index.php",
+        "method": "GET",
+        "status": 303,
+        "requestSid": "70ed7fb0",
+        "setSids": []
+      }
+    ]
+  },
+  {
+    "iteration": 3,
+    "ok": true,
+    "url": "/my/",
+    "trace": [
+      {
+        "path": "/login/index.php",
+        "method": "GET",
+        "status": 200,
+        "requestSid": "e3b0c442",
+        "setSids": [
+          "508dc6c4"
+        ]
+      },
+      {
+        "path": "/login/index.php",
+        "method": "POST",
+        "status": 303,
+        "requestSid": "508dc6c4",
+        "setSids": [
+          "5e3b1273"
+        ]
+      },
+      {
+        "path": "/login/index.php",
+        "method": "GET",
+        "status": 303,
+        "requestSid": "5e3b1273",
+        "setSids": []
+      }
+    ]
+  },
+  {
+    "iteration": 4,
+    "ok": true,
+    "url": "/my/",
+    "trace": [
+      {
+        "path": "/login/index.php",
+        "method": "GET",
+        "status": 200,
+        "requestSid": "e3b0c442",
+        "setSids": [
+          "dfd05077"
+        ]
+      },
+      {
+        "path": "/login/index.php",
+        "method": "POST",
+        "status": 303,
+        "requestSid": "dfd05077",
+        "setSids": [
+          "366f9e75"
+        ]
+      },
+      {
+        "path": "/login/index.php",
+        "method": "GET",
+        "status": 303,
+        "requestSid": "366f9e75",
+        "setSids": []
+      }
+    ]
+  },
+  {
+    "iteration": 5,
+    "ok": true,
+    "url": "/my/",
+    "trace": [
+      {
+        "path": "/login/index.php",
+        "method": "GET",
+        "status": 200,
+        "requestSid": "e3b0c442",
+        "setSids": [
+          "b9aaca96"
+        ]
+      },
+      {
+        "path": "/login/index.php",
+        "method": "POST",
+        "status": 303,
+        "requestSid": "b9aaca96",
+        "setSids": [
+          "ab43d44b"
+        ]
+      },
+      {
+        "path": "/login/index.php",
+        "method": "GET",
+        "status": 303,
+        "requestSid": "ab43d44b",
+        "setSids": []
+      }
+    ]
+  },
+  {
+    "iteration": 6,
+    "ok": true,
+    "url": "/my/",
+    "trace": [
+      {
+        "path": "/login/index.php",
+        "method": "GET",
+        "status": 200,
+        "requestSid": "e3b0c442",
+        "setSids": [
+          "4d908a22"
+        ]
+      },
+      {
+        "path": "/login/index.php",
+        "method": "POST",
+        "status": 303,
+        "requestSid": "4d908a22",
+        "setSids": [
+          "740fe20e"
+        ]
+      },
+      {
+        "path": "/login/index.php",
+        "method": "GET",
+        "status": 303,
+        "requestSid": "740fe20e",
+        "setSids": []
+      }
+    ]
+  },
+  {
+    "iteration": 7,
+    "ok": true,
+    "url": "/my/",
+    "trace": [
+      {
+        "path": "/login/index.php",
+        "method": "GET",
+        "status": 200,
+        "requestSid": "e3b0c442",
+        "setSids": [
+          "fc1cf5ae"
+        ]
+      },
+      {
+        "path": "/login/index.php",
+        "method": "POST",
+        "status": 303,
+        "requestSid": "fc1cf5ae",
+        "setSids": [
+          "8db039ff"
+        ]
+      },
+      {
+        "path": "/login/index.php",
+        "method": "GET",
+        "status": 303,
+        "requestSid": "8db039ff",
+        "setSids": []
+      }
+    ]
+  },
+  {
+    "iteration": 8,
+    "ok": true,
+    "url": "/my/",
+    "trace": [
+      {
+        "path": "/login/index.php",
+        "method": "GET",
+        "status": 200,
+        "requestSid": "e3b0c442",
+        "setSids": [
+          "0312d85a"
+        ]
+      },
+      {
+        "path": "/login/index.php",
+        "method": "POST",
+        "status": 303,
+        "requestSid": "0312d85a",
+        "setSids": [
+          "589b1e6f"
+        ]
+      },
+      {
+        "path": "/login/index.php",
+        "method": "GET",
+        "status": 303,
+        "requestSid": "589b1e6f",
+        "setSids": []
+      }
+    ]
+  },
+  {
+    "iteration": 9,
+    "ok": true,
+    "url": "/my/",
+    "trace": [
+      {
+        "path": "/login/index.php",
+        "method": "GET",
+        "status": 200,
+        "requestSid": "e3b0c442",
+        "setSids": [
+          "8ccd6d5d"
+        ]
+      },
+      {
+        "path": "/login/index.php",
+        "method": "POST",
+        "status": 303,
+        "requestSid": "8ccd6d5d",
+        "setSids": [
+          "7a5ccca3"
+        ]
+      },
+      {
+        "path": "/login/index.php",
+        "method": "GET",
+        "status": 303,
+        "requestSid": "7a5ccca3",
+        "setSids": []
+      }
+    ]
+  },
+  {
+    "iteration": 10,
+    "ok": true,
+    "url": "/my/",
+    "trace": [
+      {
+        "path": "/login/index.php",
+        "method": "GET",
+        "status": 200,
+        "requestSid": "e3b0c442",
+        "setSids": [
+          "aff37ecd"
+        ]
+      },
+      {
+        "path": "/login/index.php",
+        "method": "POST",
+        "status": 303,
+        "requestSid": "aff37ecd",
+        "setSids": [
+          "ccb2864c"
+        ]
+      },
+      {
+        "path": "/login/index.php",
+        "method": "GET",
+        "status": 303,
+        "requestSid": "ccb2864c",
+        "setSids": []
+      }
+    ]
+  }
+]

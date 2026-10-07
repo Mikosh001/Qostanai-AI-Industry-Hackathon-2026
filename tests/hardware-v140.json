@@ -1,0 +1,18 @@
+{
+  "date": "2026-10-07",
+  "scope": "Physical sensor preflight, RAM only: no enrolled identity, stored media or OS restrictions.",
+  "passed": true,
+  "capture_fps_median": 28.549999999999997,
+  "capture_fps_min": 26.6,
+  "analysis_fps_median": 9.55,
+  "screen_fps_median": 5.0,
+  "audio_dropouts": 0,
+  "errors": {
+    "camera_error": "",
+    "microphone_error": "",
+    "screen_error": "",
+    "evidence_error": ""
+  },
+  "seconds": 20,
+  "capture_threads_stopped": true
+}

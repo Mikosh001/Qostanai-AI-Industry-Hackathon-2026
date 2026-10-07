@@ -1,0 +1,18 @@
+{
+  "date": "2026-10-06",
+  "scope": "physical camera, microphone and screen pipeline; preflight; no identity enrollment, stored media or OS restrictions",
+  "passed": true,
+  "capture_fps_median": 30.0,
+  "capture_fps_min": 29.6,
+  "analysis_fps_median": 7.1,
+  "screen_fps_median": 5.0,
+  "audio_dropouts": 0,
+  "errors": {
+    "camera_error": "",
+    "microphone_error": "",
+    "screen_error": "",
+    "evidence_error": ""
+  },
+  "seconds": 30,
+  "capture_threads_stopped": true
+}

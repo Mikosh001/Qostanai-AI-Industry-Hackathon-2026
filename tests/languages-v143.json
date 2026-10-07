@@ -1,0 +1,16 @@
+{
+  "passed": true,
+  "version": "1.4.3",
+  "languages": [
+    "kk",
+    "ru",
+    "en"
+  ],
+  "firstOrigin": "http://127.0.0.1:61190",
+  "secondOrigin": "http://127.0.0.1:63135",
+  "packaged": true,
+  "savedAcrossRestart": true,
+  "activeSessionAndAnswerPreserved": true,
+  "invalidLanguageRejected": true,
+  "physicalProtectionTested": false
+}

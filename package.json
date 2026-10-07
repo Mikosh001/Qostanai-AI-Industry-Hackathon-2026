@@ -1,0 +1,82 @@
+{
+  "name": "sergek-proctor",
+  "version": "1.4.3",
+  "private": true,
+  "description": "Local proctoring and protected examination environment",
+  "author": "Sergek hackathon team",
+  "license": "AGPL-3.0-or-later",
+  "main": "desktop/main.cjs",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "tsc --noEmit && vite build",
+    "desktop": "electron .",
+    "package": "npm run build && electron-builder --win dir",
+    "installer": "npm run build && electron-builder --win nsis",
+    "test:desktop": "node --test desktop/tests/*.test.cjs",
+    "test:ui": "playwright test",
+    "test:electron": "node tests/desktop-e2e.cjs",
+    "test:moodle": "node tests/moodle-e2e.cjs",
+    "format": "prettier --write ui desktop tests vite.config.mts playwright.config.ts",
+    "test:photo": "node tests/photo-e2e.cjs",
+    "test:audio": "node tests/audio-e2e.cjs",
+    "test:guard": "node tests/guard-lifecycle.cjs"
+  },
+  "dependencies": {
+    "lucide-react": "^0.577.0",
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  },
+  "devDependencies": {
+    "@esbuild/win32-x64": "^0.28.2",
+    "@rollup/rollup-win32-x64-msvc": "^4.64.0",
+    "@playwright/test": "^1.58.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^5.1.0",
+    "electron": "44.5.1",
+    "electron-builder": "26.15.3",
+    "prettier": "3.9.9",
+    "typescript": "^5.9.0",
+    "vite": "8.3.3"
+  },
+  "build": {
+    "appId": "kz.sergek.proctor",
+    "productName": "Sergek Proctor",
+    "directories": {
+      "output": "release-v1.4.3"
+    },
+    "files": [
+      "desktop/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "dist",
+        "to": "ui"
+      },
+      {
+        "from": "build/backend",
+        "to": "backend"
+      },
+      {
+        "from": "build/guard",
+        "to": "guard"
+      },
+      {
+        "from": "models",
+        "to": "models"
+      }
+    ],
+    "win": {
+      "target": "nsis",
+      "signExecutable": false,
+      "icon": "assets/sergek.ico",
+      "requestedExecutionLevel": "requireAdministrator"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true
+    }
+  }
+}

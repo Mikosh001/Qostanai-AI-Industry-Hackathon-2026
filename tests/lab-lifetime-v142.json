@@ -1,0 +1,28 @@
+{
+  "hub_http_status": 200,
+  "moodle_http_status": 200,
+  "db": {
+    "pid": 22312,
+    "alive_after_setup_exit": true,
+    "in_job": false,
+    "runtime": "mariadbd.exe"
+  },
+  "php": {
+    "pid": 10632,
+    "alive_after_setup_exit": true,
+    "in_job": false,
+    "runtime": "php.exe"
+  },
+  "tls": {
+    "pid": 17336,
+    "alive_after_setup_exit": true,
+    "in_job": false,
+    "runtime": "python.exe"
+  },
+  "hub": {
+    "pid": 23244,
+    "alive_after_setup_exit": true,
+    "in_job": false,
+    "runtime": "python.exe"
+  }
+}

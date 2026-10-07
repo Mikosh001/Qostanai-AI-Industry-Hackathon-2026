@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<XMLDB PATH="mod/quiz/accessrule/sergek/db" VERSION="20261006" COMMENT="Sergek per-quiz settings">
+ <TABLES><TABLE NAME="quizaccess_sergek" COMMENT="Per quiz requirement">
+  <FIELDS><FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+   <FIELD NAME="quizid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+   <FIELD NAME="enabled" TYPE="int" LENGTH="1" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+  </FIELDS><KEYS><KEY NAME="primary" TYPE="primary" FIELDS="id"/><KEY NAME="quizid" TYPE="foreign-unique" FIELDS="quizid" REFTABLE="quiz" REFFIELDS="id"/></KEYS>
+ </TABLE>
+ <TABLE NAME="quizaccess_sergek_launch" COMMENT="Launch identity shared between the ordinary and protected browsers">
+  <FIELDS><FIELD NAME="id" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="true"/>
+   <FIELD NAME="userid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+   <FIELD NAME="quizid" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+   <FIELD NAME="nonce" TYPE="char" LENGTH="48" NOTNULL="true" SEQUENCE="false"/>
+   <FIELD NAME="created" TYPE="int" LENGTH="10" NOTNULL="true" SEQUENCE="false"/>
+   <FIELD NAME="attemptid" TYPE="int" LENGTH="10" NOTNULL="true" DEFAULT="0" SEQUENCE="false"/>
+  </FIELDS><KEYS><KEY NAME="primary" TYPE="primary" FIELDS="id"/>
+   <KEY NAME="userid" TYPE="foreign" FIELDS="userid" REFTABLE="user" REFFIELDS="id"/>
+   <KEY NAME="quizid" TYPE="foreign" FIELDS="quizid" REFTABLE="quiz" REFFIELDS="id"/>
+  </KEYS><INDEXES><INDEX NAME="userquiz" UNIQUE="true" FIELDS="userid,quizid"/><INDEX NAME="nonce" UNIQUE="true" FIELDS="nonce"/></INDEXES>
+ </TABLE></TABLES>
+</XMLDB>

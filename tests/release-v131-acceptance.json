@@ -1,0 +1,99 @@
+{
+  "version": "1.3.1",
+  "date": "2026-10-07",
+  "backend_tests": 49,
+  "desktop_tests": 7,
+  "browser_tests": 3,
+  "post_metric_change_pipeline_and_policy_tests": 13,
+  "packaged_moodle_handoff": {
+    "passed": true,
+    "student_login": true,
+    "login_instruction_hidden": true,
+    "signed_strict_policy_retained": true,
+    "consent_and_native_protection_not_started": true
+  },
+  "moodle_teacher_login_and_course_editing": true,
+  "panel_password_login": true,
+  "running_app_version": "1.3.1",
+  "physical_preflight": {
+    "date": "2026-10-07",
+    "scope": "Physical sensor preflight, RAM only: no enrolled identity, stored media or OS restrictions.",
+    "passed": true,
+    "capture_fps_median": 30.0,
+    "capture_fps_min": 29.6,
+    "analysis_fps_median": 22.6,
+    "screen_fps_median": 5.0,
+    "audio_dropouts": 0,
+    "errors": {
+      "camera_error": "",
+      "microphone_error": "",
+      "screen_error": "",
+      "evidence_error": ""
+    },
+    "seconds": 15,
+    "capture_threads_stopped": true
+  },
+  "public_image_pipeline": {
+    "passed": true,
+    "fixture": "public image sequence; no physical camera or screen",
+    "capture_fps": 27.3,
+    "analysis_fps": 9.4,
+    "photo_saved": true,
+    "stream_rendered": true,
+    "identity_event_with_evidence": true,
+    "phone_event_with_evidence": true
+  },
+  "phone_static_regression": {
+    "dataset": "Existing COCO128 public labels, static images; not webcam accuracy guarantee",
+    "resolution": 960,
+    "threshold": 0.4,
+    "missing_files": [
+      "000000000656.jpg",
+      "000000000659.jpg"
+    ],
+    "phone_samples": [
+      {
+        "file": "000000000328.jpg",
+        "label_phone": true,
+        "detected": true,
+        "confidence": 0.588,
+        "ms": 375.0
+      },
+      {
+        "file": "000000000387.jpg",
+        "label_phone": true,
+        "detected": true,
+        "confidence": 0.519,
+        "ms": 719.0
+      },
+      {
+        "file": "000000000395.jpg",
+        "label_phone": true,
+        "detected": true,
+        "confidence": 0.477,
+        "ms": 907.0
+      },
+      {
+        "file": "000000000536.jpg",
+        "label_phone": true,
+        "detected": false,
+        "confidence": 0,
+        "ms": 328.0
+      },
+      {
+        "file": "000000000560.jpg",
+        "label_phone": true,
+        "detected": false,
+        "confidence": 0,
+        "ms": 359.0
+      }
+    ],
+    "positive_detected": 3,
+    "positive_total": 5,
+    "negative_flagged": [],
+    "negative_total": 121,
+    "mean_ms": 402.0
+  },
+  "asar_and_ui_guard_match": true,
+  "physical_global_restrictions_and_university_integration": "not verified"
+}

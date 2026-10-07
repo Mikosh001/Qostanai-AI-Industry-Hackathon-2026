@@ -1,0 +1,13 @@
+{
+  "same_person": {
+    "state": "match",
+    "score": 1.0,
+    "threshold": 0.363
+  },
+  "different_person": {
+    "state": "mismatch",
+    "score": -0.0164,
+    "threshold": 0.363
+  },
+  "ms": 92.0
+}

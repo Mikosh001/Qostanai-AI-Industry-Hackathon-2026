@@ -1,0 +1,11 @@
+{
+  "health": {
+    "ok": true,
+    "version": "1.4.1",
+    "setup_required": false
+  },
+  "mode": "strict",
+  "manual_challenge_present": false,
+  "camera_required": true,
+  "passive_monitor_unchanged": true
+}

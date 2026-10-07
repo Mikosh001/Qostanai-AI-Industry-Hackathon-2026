@@ -1,0 +1,12 @@
+{
+  "passed": true,
+  "fixture": "public image sequence; no physical camera or screen",
+  "capture_fps": 27.9,
+  "analysis_fps": 10.2,
+  "photo_saved": true,
+  "manual_challenge_removed": true,
+  "legacy_profile_compatible": true,
+  "stream_rendered": true,
+  "identity_event_with_evidence": true,
+  "phone_event_with_evidence": false
+}

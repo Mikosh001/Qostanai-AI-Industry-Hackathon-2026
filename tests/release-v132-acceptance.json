@@ -1,0 +1,46 @@
+{
+  "version": "1.3.2",
+  "date": "2026-10-07",
+  "backend_and_launcher_tests": 50,
+  "desktop_tests": 7,
+  "native_self_tests": {
+    "passed": true,
+    "launcher_topology": true,
+    "own_window_regression_checks": 10
+  },
+  "windows_job_regression": {
+    "passed": true,
+    "attached_owned_process_stopped": true,
+    "detached_owned_process_survived": true,
+    "scope": "Two inert owned processes; no global restrictions"
+  },
+  "guard_lifecycle": {
+    "passed": true,
+    "heartbeats_kept_lease": true,
+    "probe_did_not_renew_lease": true,
+    "expired_lease_released": true,
+    "release_idempotent": true,
+    "global_restrictions": false
+  },
+  "packaged_moodle_handoff": {
+    "passed": true,
+    "real_local_moodle_login": true,
+    "selected_quiz_automatic_handoff": true,
+    "signed_strict_policy_retained": true,
+    "camera_and_native_restrictions": "not started; stopped before consent"
+  },
+  "actual_demo_launcher": {
+    "passed": true,
+    "independent_supervisor": true,
+    "explicit_private_demo_config": true,
+    "running_version": "1.3.2",
+    "backend_health": true,
+    "setup_required": false,
+    "moodle_login_screen_visible": true,
+    "all_strict_protection_flags_retained": true
+  },
+  "asar_and_native_guard_match_source_build": true,
+  "previous_usb_rdp_recovery": "completed without error",
+  "physical_full_strict_exam": "not verified",
+  "root_cause": "Suspected supervisor process lifetime dependency; no matching crash event was found"
+}

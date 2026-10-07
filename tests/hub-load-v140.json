@@ -1,0 +1,30 @@
+{
+  "scope": "Actual isolated HTTPS hub with synthetic students; no cameras or OS enforcement.",
+  "students": 200,
+  "heartbeat_period_seconds": 5,
+  "rounds": 12,
+  "duration_seconds": 63.2,
+  "ingest_requests": 2600,
+  "status_requests": 2400,
+  "ingest_ms": {
+    "p50": 780.2,
+    "p95": 1927.9,
+    "p99": 2182.0
+  },
+  "status_ms": {
+    "p50": 677.1,
+    "p95": 2665.7,
+    "p99": 4309.8
+  },
+  "errors": [],
+  "stale_active_responses": 0,
+  "max_cycle_seconds": 7.034,
+  "payload_max_bytes": 122003,
+  "hub_rss_peak_mb": 311.6,
+  "passed": true,
+  "machine": {
+    "logical_cpus": 20,
+    "ram_gb": 15.7
+  },
+  "completed_sessions": 200
+}

@@ -1,0 +1,9 @@
+{
+  "passed": true,
+  "nativeSelfTests": true,
+  "heartbeatsKeptLeaseBeyond10Seconds": true,
+  "probeDidNotRenewLease": true,
+  "leaseExpiredAndReleased": true,
+  "releaseIdempotent": true,
+  "globalRestrictions": false
+}

@@ -1,0 +1,51 @@
+{
+  "dataset": "Existing COCO128 public labels, static images; not webcam accuracy guarantee",
+  "resolution": 960,
+  "threshold": 0.4,
+  "missing_files": [
+    "000000000656.jpg",
+    "000000000659.jpg"
+  ],
+  "phone_samples": [
+    {
+      "file": "000000000328.jpg",
+      "label_phone": true,
+      "detected": true,
+      "confidence": 0.588,
+      "ms": 375.0
+    },
+    {
+      "file": "000000000387.jpg",
+      "label_phone": true,
+      "detected": true,
+      "confidence": 0.519,
+      "ms": 719.0
+    },
+    {
+      "file": "000000000395.jpg",
+      "label_phone": true,
+      "detected": true,
+      "confidence": 0.477,
+      "ms": 907.0
+    },
+    {
+      "file": "000000000536.jpg",
+      "label_phone": true,
+      "detected": false,
+      "confidence": 0,
+      "ms": 328.0
+    },
+    {
+      "file": "000000000560.jpg",
+      "label_phone": true,
+      "detected": false,
+      "confidence": 0,
+      "ms": 359.0
+    }
+  ],
+  "positive_detected": 3,
+  "positive_total": 5,
+  "negative_flagged": [],
+  "negative_total": 121,
+  "mean_ms": 402.0
+}

@@ -1,0 +1,105 @@
+{
+  "version": "1.3.0",
+  "date": "2026-10-07",
+  "platform": "Windows x64",
+  "fixed": {
+    "blocked_navigation_and_assets": "security audit only; never a student review flag",
+    "technical_burst": "200 observations created no media jobs",
+    "voice": "Silero VAD 6.0; four voiced seconds; one event per continuous episode; tone/noise/short speech rejected in fixtures",
+    "short_gaze": "good quality, single face, confidence >= .75 and default eight seconds",
+    "phone": "default .55 confidence and two seconds; raised signal in one event; brief detector dropout does not duplicate",
+    "microphone": "one dropout is transient; repeated dropouts still fail readiness",
+    "moodle_helpers": "exact owned process identity plus source revision and HTTPS readiness; stale reused PID regression",
+    "moodle_preference": "lab-only BOOL false/empty encoding; authenticated upstream validation retained"
+  },
+  "passed": {
+    "backend_tests": 40,
+    "desktop_tests": 7,
+    "browser_tests": 3,
+    "ten_capture_restarts": true,
+    "technical_event_evidence_polling_disabled": true,
+    "native_key_predicates": 5,
+    "native_window_regression": {
+      "classification_checks": 10,
+      "own_folder_windows_closed": 2,
+      "shell_and_hidden_helpers_preserved": true,
+      "global_restrictions": false
+    },
+    "native_lease_lifecycle": {
+      "passed": true,
+      "nativeSelfTests": true,
+      "heartbeatsKeptLeaseBeyond10Seconds": true,
+      "probeDidNotRenewLease": true,
+      "leaseExpiredAndReleased": true,
+      "releaseIdempotent": true,
+      "globalRestrictions": false
+    },
+    "physical_sensor_preflight": {
+      "date": "2026-10-06",
+      "scope": "physical camera, microphone and screen pipeline; preflight; no identity enrollment, stored media or OS restrictions",
+      "passed": true,
+      "capture_fps_median": 30.0,
+      "capture_fps_min": 29.6,
+      "analysis_fps_median": 7.1,
+      "screen_fps_median": 5.0,
+      "audio_dropouts": 0,
+      "errors": {
+        "camera_error": "",
+        "microphone_error": "",
+        "screen_error": "",
+        "evidence_error": ""
+      },
+      "seconds": 30,
+      "capture_threads_stopped": true
+    },
+    "photo_identity_ui": {
+      "passed": true,
+      "fixture": "public image sequence; no physical camera or screen",
+      "capture_fps": 28.2,
+      "analysis_fps": 4.9,
+      "photo_saved": true,
+      "stream_rendered": true,
+      "identity_event_with_evidence": true
+    },
+    "encrypted_audio_and_teacher_playback": true,
+    "source_and_packaged_moodle": {
+      "moodle": "4.5.15",
+      "automatic_demo_bootstrap": true,
+      "signed_login_handoff_submit_completion": true,
+      "blocked_resource_and_window_audit_without_false_flag": true,
+      "authored_quiz": "five Kazakh questions; editingteacher created protected quiz; imported GIFT; added questions; packaged student submitted all five"
+    },
+    "asar_ui_guard_models_match_build": true,
+    "administrator_manifest": true,
+    "portaudio_dll_bundled": true,
+    "packaged_strict_five_question_handoff": {
+      "signed_mode": "strict",
+      "all_protection_retained": true,
+      "stopped_before_consent": true
+    },
+    "npm_runtime_audit": {
+      "info": 0,
+      "low": 0,
+      "moderate": 0,
+      "high": 0,
+      "critical": 0,
+      "total": 0
+    }
+  },
+  "demo_ready": {
+    "moodle": "https://localhost/",
+    "hub": "https://localhost:9443",
+    "launcher": "Start-Sergek-Demo.cmd",
+    "shortcut": "Sergек — таныстыру",
+    "preferred_quiz": "Бағдарламалау негіздері — 5 сұрақ",
+    "student_configuration_required": false,
+    "secrets_in_source_archive": false
+  },
+  "limits": [
+    "Moodle full submission acceptance uses an administrative software fixture with sensors and OS restrictions disabled.",
+    "Physical camera/microphone/screen preflight ran for 30 seconds without enrolled identity, stored media or OS restrictions.",
+    "USB denial/restoration, global hotkeys/screenshot protection, RDP restoration and secure desktop still require physical managed-Windows acceptance.",
+    "Model thresholds reduce noise but are not an independently measured accuracy guarantee; teacher review remains required.",
+    "University Moodle/SSO and Platonus credentials remain unavailable."
+  ]
+}

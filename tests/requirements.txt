@@ -1,0 +1,2 @@
+-r ../backend/requirements-build.lock.txt
+pypdf==6.19.0
