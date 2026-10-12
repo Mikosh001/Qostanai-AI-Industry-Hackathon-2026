@@ -37,10 +37,25 @@ internal static partial class Program {
     static async Task Main(string[] args) {
         if(args.Contains("--self-test-windows")){Environment.ExitCode=WindowRegression()?0:1;return;}
         if(args.Contains("--test-target")){await Task.Delay(30000);return;}
+        if(args.Contains("--test-target-exit"))return;
         if(args.Contains("--self-test-close")) {
-            using var target=Process.Start(new ProcessStartInfo(Environment.ProcessPath!,"--test-target"){UseShellExecute=false,CreateNoWindow=true})!;
+            Process StartTarget(string argument) {
+                var start=new ProcessStartInfo(Environment.ProcessPath!){UseShellExecute=false,CreateNoWindow=true};
+                // Framework-dependent CI runs as dotnet guard.dll; packaged
+                // Windows runs as the self-contained executable.
+                if(Path.GetFileNameWithoutExtension(Environment.ProcessPath).Equals("dotnet",StringComparison.OrdinalIgnoreCase))
+                    start.ArgumentList.Add(typeof(Program).Assembly.Location);
+                start.ArgumentList.Add(argument);
+                return Process.Start(start)!;
+            }
+            using var target=StartTarget("--test-target");
             await Task.Delay(300);CloseProcess(target,false,false);
-            var passed=target.WaitForExit(2000);Emit(new{type="self_test_close",passed,target="own isolated child only",screen_capture=false});
+            var closed=target.WaitForExit(2000);
+            using var exited=StartTarget("--test-target-exit");
+            var alreadyExited=exited.WaitForExit(2000);
+            if(alreadyExited)CloseProcess(exited,false,false);
+            var passed=closed&&alreadyExited;
+            Emit(new{type="self_test_close",passed,target="own isolated children only",already_exited=alreadyExited,screen_capture=false});
             Environment.ExitCode=passed?0:1;return;
         }
         if(args.Contains("--self-test")) {

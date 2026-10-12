@@ -169,20 +169,27 @@ internal static partial class Program {
         } catch{return null;}
     }
     static void CloseProcess(Process process,bool visible,bool capture=true) {
-        var pid=process.Id;var name=process.ProcessName+".exe";var handle=process.MainWindowHandle;
+        // Enumeration and enforcement are separate: a process can exit between
+        // them. Read metadata once and handle that race before using it.
+        int pid;string processName;nint handle;
+        try {
+            if(process.HasExited)return;
+            pid=process.Id;processName=process.ProcessName;handle=process.MainWindowHandle;
+        } catch(InvalidOperationException) {return;}
+        var name=processName+".exe";
         if(Trusted(pid))return;
         // A parent editor can own a kill-on-close Job containing the exam. Never
         // kill that parent: reject readiness and recover restrictions instead.
         // Explorer folder windows are handled below without terminating its process.
-        if(ExamLauncher(pid)&&!process.ProcessName.Equals("explorer",StringComparison.OrdinalIgnoreCase)) {
+        if(ExamLauncher(pid)&&!processName.Equals("explorer",StringComparison.OrdinalIgnoreCase)) {
             LastError="Қосымшаны жұмыс үстеліндегі Sergек таныстыру таңбашасымен қайта ашыңыз";
             Emit(new{type="event",kind="application_close_failed",detail=new{pid,name,blocked=false,reason="launcher_owns_exam"}});
             Release();return;
         }
         var title=WindowTitle(handle);
         // Close Explorer/UWP windows, never terminate the Windows shell or UWP host.
-        if(process.ProcessName.Equals("explorer",StringComparison.OrdinalIgnoreCase)||process.ProcessName.Equals("ApplicationFrameHost",StringComparison.OrdinalIgnoreCase)) {
-            foreach(var target in ApplicationWindows(pid,process.ProcessName)) {
+        if(processName.Equals("explorer",StringComparison.OrdinalIgnoreCase)||processName.Equals("ApplicationFrameHost",StringComparison.OrdinalIgnoreCase)) {
+            foreach(var target in ApplicationWindows(pid,processName)) {
                 var picture=capture?ScreenImage():null;
                 var windowTitle=WindowTitle(target);
                 var closed=CloseApplicationWindow(target,pid);
