@@ -43,7 +43,7 @@ internal static partial class Program {
                 var start=new ProcessStartInfo(Environment.ProcessPath!){UseShellExecute=false,CreateNoWindow=true};
                 // Framework-dependent CI runs as dotnet guard.dll; packaged
                 // Windows runs as the self-contained executable.
-                if(Path.GetFileNameWithoutExtension(Environment.ProcessPath).Equals("dotnet",StringComparison.OrdinalIgnoreCase))
+                if(string.Equals(Path.GetFileNameWithoutExtension(Environment.ProcessPath),"dotnet",StringComparison.OrdinalIgnoreCase))
                     start.ArgumentList.Add(typeof(Program).Assembly.Location);
                 start.ArgumentList.Add(argument);
                 return Process.Start(start)!;

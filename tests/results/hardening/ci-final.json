@@ -1,0 +1,8 @@
+{
+  "run_id": 38245244934,
+  "job_id": 114797370870,
+  "commit": "446f780022498c51d451908a74f8db29b27c338e",
+  "conclusion": "success",
+  "url": "https://github.com/Mikosh001/Qostanai-AI-Industry-Hackathon-2026/actions/runs/38245244934",
+  "scope": "fresh GitHub Windows runner: backend, UI build, desktop tests, native isolated self-tests, browser acceptance; no physical OS enforcement"
+}

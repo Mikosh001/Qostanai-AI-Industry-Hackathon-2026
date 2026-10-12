@@ -27,7 +27,15 @@
   "browser_tests": 12,
   "desktop_tests": 16,
   "native_global_restrictions_tested": false,
-  "operator_native_acceptance": "pending",
+  "operator_native_acceptance": "deferred by operator: important applications open",
+  "ci": {
+    "run_id": 38245244934,
+    "job_id": 114797370870,
+    "commit": "446f780022498c51d451908a74f8db29b27c338e",
+    "conclusion": "success",
+    "url": "https://github.com/Mikosh001/Qostanai-AI-Industry-Hackathon-2026/actions/runs/38245244934",
+    "scope": "fresh GitHub Windows runner: backend, UI build, desktop tests, native isolated self-tests, browser acceptance; no physical OS enforcement"
+  },
   "backup_restore": {
     "passed": true,
     "scope": "offline whole directory, same Windows account; no cross-user/VM DPAPI claim",
@@ -39,8 +47,8 @@
   },
   "installer": {
     "file": "Sergek Proctor Setup 1.5.0.exe",
-    "bytes": 342792728,
-    "sha256": "e58f0384b4d0e2f79bfca2003cc59b1a67e622c296ed3d0d5a739c42ad0f23b2",
+    "bytes": 342793257,
+    "sha256": "6d54633f860835c10ba030062454b6c97ec62b470604b0b6659afeaa0257ee4d",
     "authenticode": false
   }
 }
