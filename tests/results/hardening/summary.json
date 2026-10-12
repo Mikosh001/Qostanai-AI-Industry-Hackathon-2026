@@ -29,11 +29,11 @@
   "native_global_restrictions_tested": false,
   "operator_native_acceptance": "deferred by operator: important applications open",
   "ci": {
-    "run_id": 38245244934,
-    "job_id": 114797370870,
-    "commit": "446f780022498c51d451908a74f8db29b27c338e",
+    "run_id": 38246425529,
+    "job_id": 114801306471,
+    "commit": "9f32d6d4b3f16e6535b11a933eec92dbb276d789",
     "conclusion": "success",
-    "url": "https://github.com/Mikosh001/Qostanai-AI-Industry-Hackathon-2026/actions/runs/38245244934",
+    "url": "https://github.com/Mikosh001/Qostanai-AI-Industry-Hackathon-2026/actions/runs/38246425529",
     "scope": "fresh GitHub Windows runner: backend, UI build, desktop tests, native isolated self-tests, browser acceptance; no physical OS enforcement"
   },
   "backup_restore": {
