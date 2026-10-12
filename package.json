@@ -1,6 +1,6 @@
 {
   "name": "sergek-proctor",
-  "version": "1.5.0",
+  "version": "1.5.1",
   "private": true,
   "description": "Local proctoring and protected examination environment",
   "author": "Sergek hackathon team",
@@ -19,7 +19,8 @@
     "format": "prettier --write ui desktop tests vite.config.mts playwright.config.ts",
     "test:photo": "node tests/photo-e2e.cjs",
     "test:audio": "node tests/audio-e2e.cjs",
-    "test:guard": "node tests/guard-lifecycle.cjs"
+    "test:guard": "node tests/guard-lifecycle.cjs",
+    "test:focus": "node tests/focus-native-e2e.cjs"
   },
   "dependencies": {
     "lucide-react": "^0.577.0",
@@ -43,7 +44,7 @@
     "appId": "kz.sergek.proctor",
     "productName": "Sergek Proctor",
     "directories": {
-      "output": "release-v1.5.0"
+      "output": "release-v1.5.1"
     },
     "files": [
       "desktop/**/*",

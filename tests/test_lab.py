@@ -39,6 +39,44 @@ def test_base_runtime_helpers_are_owned_without_a_venv_redirector(monkeypatch):
     assert module.owned_process('tls',123) is None
 
 
+def database_fixture(monkeypatch, tmp_path, attached, valid=True):
+    load_lab()
+    setup=sys.modules['setup']
+    exe=tmp_path/'mariadbd.exe'; datadir=tmp_path/'db'
+    calls=[]
+    helper=SimpleNamespace(pid=123,exe=lambda:str(exe),
+        cmdline=lambda:['--defaults-file='+str(datadir/'my.ini' if valid else tmp_path/'other.ini')],
+        terminate=lambda:calls.append('terminate'),wait=lambda **kwargs:calls.append('wait'))
+    monkeypatch.setattr(setup,'LAB',tmp_path)
+    monkeypatch.setattr(setup.psutil,'Process',lambda pid:helper)
+    monkeypatch.setattr(setup.psutil,'pid_exists',lambda pid:True)
+    monkeypatch.setattr(setup,'process_in_job',lambda pid: attached if pid==123 else False)
+    monkeypatch.setattr(setup.time,'sleep',lambda n:None)
+    monkeypatch.setattr(setup,'start_independent',lambda args,cwd,hidden: calls.append(('spawn',args,hidden)) or 456)
+    return setup,exe,datadir,calls
+
+
+def test_independent_lab_database_is_reused(monkeypatch,tmp_path):
+    setup,exe,datadir,calls=database_fixture(monkeypatch,tmp_path,False)
+    assert setup.ensure_database({'db':123},exe,datadir)==123
+    assert calls==[]
+
+
+def test_editor_job_database_is_restarted_independently(monkeypatch,tmp_path):
+    setup,exe,datadir,calls=database_fixture(monkeypatch,tmp_path,True)
+    pids={'db':123,'php':234}
+    assert setup.ensure_database(pids,exe,datadir)==456
+    assert calls[:2]==['terminate','wait']
+    assert calls[2][0]=='spawn' and calls[2][2] is True
+    assert pids=={'db':456,'php':234}
+
+
+def test_same_database_executable_with_another_config_is_never_terminated(monkeypatch,tmp_path):
+    setup,exe,datadir,calls=database_fixture(monkeypatch,tmp_path,True,valid=False)
+    assert setup.ensure_database({'db':123},exe,datadir)==456
+    assert not any(c in ['terminate','wait'] for c in calls)
+
+
 def test_lab_preference_transport_preserves_auth_and_other_bodies(monkeypatch):
     module=load_lab();monkeypatch.setenv('SERGEK_LAB',str(module.LAB))
     spec=importlib.util.spec_from_file_location('sergek_lab_proxy',module.ROOT/'lab'/'proxy.py')

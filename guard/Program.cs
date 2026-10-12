@@ -36,6 +36,8 @@ internal static partial class Program {
     static bool Admin() => new WindowsPrincipal(WindowsIdentity.GetCurrent()).IsInRole(WindowsBuiltInRole.Administrator);
     static async Task Main(string[] args) {
         if(args.Contains("--self-test-windows")){Environment.ExitCode=WindowRegression()?0:1;return;}
+        if(args.Contains("--test-target-window")){RunWindowTarget();return;}
+        if(args.Contains("--self-test-window-close")){Environment.ExitCode=WindowClosureRegression()?0:1;return;}
         if(args.Contains("--test-target")){await Task.Delay(30000);return;}
         if(args.Contains("--test-target-exit"))return;
         if(args.Contains("--self-test-close")) {
@@ -74,7 +76,7 @@ internal static partial class Program {
         Console.CancelKeyPress += (_,e) => {e.Cancel=true;Closing=true;Release();};
         using var timer=new System.Threading.Timer(_=>Watch(),null,1000,1000);
         using var leaseTimer=new System.Threading.Timer(_=>CheckLease(),null,500,500);
-        using var applicationTimer=new System.Threading.Timer(_=>WatchApplications(),null,200,200);
+        using var applicationTimer=new System.Threading.Timer(_=>WatchApplications(),null,100,100);
         Emit(new {type="ready",admin=Admin(),recovery_pending=File.Exists(JournalPath),error=LastError});
         try {
             string? line;
@@ -84,6 +86,7 @@ internal static partial class Program {
                     var command=root.GetProperty("command").GetString();
                     var id=root.TryGetProperty("id",out var idValue)?idValue.GetString():null;
                     if(command=="heartbeat") {Lease=Environment.TickCount64;Emit(new {type="response",id,status=Status()});}
+                    else if(command=="foreground") {Emit(new {type="response",id,status=ForegroundStatus()});}
                     else if(command=="probe") {
                         // WMI runs in the independent watcher, never in the lease IPC queue.
                         SetForbidden(root);Emit(new {type="response",id,status=Status()});

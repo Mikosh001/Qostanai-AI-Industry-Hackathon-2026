@@ -26,6 +26,7 @@ internal static partial class Program {
     static long LastParentUpdate,LastApplicationScan,LastRemoteCheck;
     static int LastForeground;
     static int ExamOwnerPid;
+    static readonly Queue<int> ApplicationScan = new();
     static readonly HashSet<string> Critical=new(StringComparer.OrdinalIgnoreCase){
         "System","Registry","smss","csrss","wininit","services","lsass","winlogon","dwm",
         "fontdrvhost","svchost","sihost","ctfmon","taskhostw","conhost","RuntimeBroker",
@@ -37,7 +38,7 @@ internal static partial class Program {
         if(root.TryGetProperty("trusted_pids",out var pids))foreach(var pid in pids.EnumerateArray())TrustedPids.Add(pid.GetInt32());
         ExamOwnerPid=root.TryGetProperty("owner_pid",out var owner)?owner.GetInt32():0;
         if(ExamOwnerPid>0)TrustedPids.Add(ExamOwnerPid);
-        UpdateParents();LastForeground=0;
+        UpdateParents();LastForeground=0;ApplicationScan.Clear();LastApplicationScan=0;
     }
     static void UpdateParents() {
         var parents=new Dictionary<int,int>();var snapshot=Native.CreateToolhelp32Snapshot(2,0);
@@ -62,6 +63,27 @@ internal static partial class Program {
             if(cursor==pid)return true;
         return false;
     }
+    static bool ExamForegroundMatches(nint exam,nint foreground,nint rootOwner,int ownerPid,int foregroundPid) =>
+        exam!=0&&foreground!=0&&(foreground==exam||rootOwner==exam||ownerPid>0&&foregroundPid==ownerPid);
+    static object ForegroundStatus() {
+        var foreground=Native.GetForegroundWindow();
+        Native.GetWindowThreadProcessId(foreground,out var pid);
+        // Electron's modal and native permission windows can have their own root
+        // HWND. Accept the exact exam main process, never an executable name or
+        // the broader trusted helper list. External browsers have a different PID.
+        return new {available=true,active=Active,exam_foreground=ExamForegroundMatches(ExamWindow,foreground,Native.GetAncestor(foreground,3),ExamOwnerPid,(int)pid),foreground_pid=pid};
+    }
+    static void EnforceApplication(int pid,Dictionary<int,List<(nint handle,string cls)>> windows) {
+        try {
+            using var process=Process.GetProcessById(pid);
+            var name=process.ProcessName;
+            var remote=RemoteEnforced&&RemoteExecutables.Contains(name+".exe");
+            if(Trusted(pid)||process.SessionId!=OwnSession&&!remote||Critical.Contains(name))return;
+            var visible=ApplicationWindows(pid,name,windows).Count!=0;
+            if(CloseApplications&&(visible||Forbidden.Contains(name+".exe"))||remote)
+                CloseProcess(process,visible,false); // A screenshot must not delay preventive closure.
+        } catch(ArgumentException) { } catch(InvalidOperationException) { }
+    }
     static void WatchApplications() {
         if(!Active||Interlocked.Exchange(ref ApplicationBusy,1)!=0)return;
         try {
@@ -79,21 +101,22 @@ internal static partial class Program {
                     Emit(new{type="event",kind="foreground_changed",detail=new{pid=process.Id,name=process.ProcessName+".exe",title=WindowTitle(window),trusted,prevention_active=CloseApplications,screen_jpeg=!trusted&&!CloseApplications?ScreenImage():null}});
                 } catch { }
             }
-            if(Environment.TickCount64-LastApplicationScan<400)return;
+            var visibleWindows=VisibleWindows();
+            // Prioritize the actual foreground on every tick, including a newly
+            // launched browser whose PID was absent from the previous scan.
+            if(foreground!=0)EnforceApplication((int)foreground,visibleWindows);
+            if(!Active||Environment.TickCount64-LastApplicationScan<400)return;
             LastApplicationScan=Environment.TickCount64;
             var scanStart=Environment.TickCount64;
-            var visibleWindows=VisibleWindows();
-            foreach(var process in Process.GetProcesses()) {
-                using(process) {
-                    try {
-                        var name=process.ProcessName;var forbidden=Forbidden.Contains(name+".exe");
-                        var remote=RemoteEnforced&&RemoteExecutables.Contains(name+".exe");
-                        if(Trusted(process.Id)||process.SessionId!=OwnSession&&!remote)continue;
-                        var visible=ApplicationWindows(process.Id,name,visibleWindows).Count!=0;
-                        if((CloseApplications&&visible||forbidden&&CloseApplications||remote)&&!Critical.Contains(name))CloseProcess(process,visible);
-                    } catch(ArgumentException){ } // Process exited during enumeration.
-                      catch(InvalidOperationException){ }
-                }
+            if(ApplicationScan.Count==0) {
+                var processes=Process.GetProcesses();
+                try {foreach(var pid in visibleWindows.Keys.Concat(processes.Select(p=>p.Id)).Distinct())ApplicationScan.Enqueue(pid);}
+                finally {foreach(var process in processes)process.Dispose();}
+            }
+            // Keep the unfinished tail. Restarting enumeration under a fixed
+            // time budget could leave later processes unexamined indefinitely.
+            while(Active&&ApplicationScan.Count>0) {
+                EnforceApplication(ApplicationScan.Dequeue(),visibleWindows);
                 if(Environment.TickCount64-scanStart>350)break;
             }
             if(RemoteEnforced&&Native.GetSystemMetrics(0x1000)!=0) {
@@ -198,12 +221,14 @@ internal static partial class Program {
             return;
         }
         var processPicture=visible&&capture?ScreenImage():null;
+        var hidden=visible?ApplicationWindows(pid,processName):new List<nint>();
         try {
-            if(visible)process.CloseMainWindow();
-            if(!process.WaitForExit(120))process.Kill();
+            foreach(var target in hidden)Native.ShowWindowAsync(target,0);
+            process.Kill();
             bool closed=process.WaitForExit(700);
             Emit(new{type="event",kind=closed?"application_closed":"application_close_failed",detail=new{pid,name,title,blocked=closed,screen_jpeg=processPicture}});
         } catch(Exception ex) {
+            foreach(var target in hidden)if(Native.IsWindow(target))Native.ShowWindowAsync(target,5);
             Emit(new{type="event",kind="application_close_failed",detail=new{pid,name,title,blocked=false,error=ex.Message,screen_jpeg=processPicture}});
         }
     }
@@ -281,6 +306,8 @@ internal static partial class Native {
     [DllImport("kernel32.dll",CharSet=CharSet.Unicode)]internal static extern bool Process32Next(nint snapshot,ref ProcessEntry row);
     [DllImport("kernel32.dll")]internal static extern bool CloseHandle(nint handle);
     [DllImport("user32.dll")]internal static extern nint GetForegroundWindow();
+    [DllImport("user32.dll")]internal static extern nint GetAncestor(nint handle,uint flags);
+    [DllImport("user32.dll")]internal static extern bool ShowWindowAsync(nint handle,int command);
     [DllImport("user32.dll")]internal static extern uint GetWindowThreadProcessId(nint handle,out uint pid);
     [DllImport("user32.dll",CharSet=CharSet.Unicode)]internal static extern int GetWindowText(nint handle,StringBuilder text,int count);
     [DllImport("user32.dll",CharSet=CharSet.Unicode)]internal static extern int GetClassName(nint handle,StringBuilder text,int count);

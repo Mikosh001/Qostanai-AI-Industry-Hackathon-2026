@@ -1,0 +1,9 @@
+{
+  "initialHarnessRun": "automation connection closed at question four; not a clean harness pass",
+  "applicationSessionContinued": true,
+  "completionViaReconnectedCDP": true,
+  "status": "completed",
+  "started": "2026-10-12T13:49:41.131690+00:00",
+  "ended": "2026-10-12T13:58:25.305131+00:00",
+  "physicalWindowsRestrictions": false
+}

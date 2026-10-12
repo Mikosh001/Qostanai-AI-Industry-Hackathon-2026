@@ -1,0 +1,11 @@
+{
+  "passed": true,
+  "realElectronWebContentsView": true,
+  "ownedModalElectronFocusFalse": true,
+  "nativeOwnWindowAccepted": true,
+  "ownedForegroundSamples": 8,
+  "minimumSampleIntervalMs": 250,
+  "sameExecutableDifferentProcessRejected": true,
+  "globalRestrictions": false,
+  "otherApplicationsClosed": false
+}

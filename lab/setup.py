@@ -8,6 +8,8 @@ from cryptography.x509.oid import NameOID
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 import ipaddress
+import psutil
+from independent import process_in_job, start_independent
 
 ROOT = Path(__file__).resolve().parent.parent
 workspace_lab = ROOT.parent.parent / "work" / "local-moodle"
@@ -38,6 +40,36 @@ def run(args, **kwargs):
     return subprocess.run(
         [str(a) for a in args], creationflags=FLAGS, check=True, **kwargs
     )
+
+
+def ensure_database(pids, executable, datadir):
+    """Reuse only this exact lab database with an independent lifetime."""
+    previous = None
+    if pids.get("db"):
+        try:
+            candidate = psutil.Process(pids["db"])
+            if (Path(candidate.exe()).resolve() == executable.resolve()
+                    and "--defaults-file=" + str(datadir / "my.ini") in candidate.cmdline()):
+                previous = candidate
+        except psutil.Error:
+            pass
+    if previous is not None:
+        if not process_in_job(previous.pid):
+            return previous.pid
+        # A database inherited from an editor Job dies when that editor closes.
+        # The exact executable AND defaults file are verified before restart.
+        previous.terminate()
+        previous.wait(timeout=8)
+    pid = start_independent([
+        executable, "--defaults-file=" + str(datadir / "my.ini"),
+        "--port=3308", "--bind-address=127.0.0.1",
+    ], ROOT, hidden=True)
+    pids["db"] = pid
+    (LAB / "pids.json").write_text(json.dumps(pids))
+    time.sleep(3)
+    if not psutil.pid_exists(pid) or process_in_job(pid):
+        raise RuntimeError("Independent MariaDB startup failed; inspect db/*.err")
+    return pid
 
 
 def certificate():
@@ -162,33 +194,7 @@ def prepare():
         if (LAB / "pids.json").exists()
         else {}
     )
-    running = False
-    if pids.get("db") and psutil.pid_exists(pids["db"]):
-        try:
-            running = (
-                Path(psutil.Process(pids["db"]).exe()).resolve()
-                == (dbbin / "mariadbd.exe").resolve()
-            )
-        except psutil.Error:
-            pass
-    if not running:
-        log = (LAB / "db.log").open("ab")
-        process = subprocess.Popen(
-            [
-                str(dbbin / "mariadbd.exe"),
-                "--defaults-file=" + str(datadir / "my.ini"),
-                "--port=3308",
-                "--bind-address=127.0.0.1",
-            ],
-            stdout=log,
-            stderr=log,
-            creationflags=FLAGS,
-        )
-        pids["db"] = process.pid
-        (LAB / "pids.json").write_text(json.dumps(pids))
-        time.sleep(3)
-        if process.poll() is not None:
-            raise RuntimeError("MariaDB failed; inspect db.log")
+    ensure_database(pids, dbbin / "mariadbd.exe", datadir)
     env = {**os.environ, "MYSQL_PWD": values["dbroot"]}
     sql = f"CREATE DATABASE IF NOT EXISTS sergek_moodle CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci; CREATE USER IF NOT EXISTS 'sergek'@'127.0.0.1' IDENTIFIED BY '{values['dbpass']}'; GRANT ALL ON sergek_moodle.* TO 'sergek'@'127.0.0.1';"
     run(

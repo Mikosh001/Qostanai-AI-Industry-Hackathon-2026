@@ -35,7 +35,7 @@ jobs:
         run: |
           dotnet build guard/Sergek.Guard.csproj -c Release --nologo
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          foreach ($test in @('--self-test', '--self-test-close', '--self-test-windows')) {
+          foreach ($test in @('--self-test', '--self-test-close', '--self-test-windows', '--self-test-window-close')) {
             dotnet guard/bin/Release/net8.0-windows/Sergek.Guard.dll $test
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           }

@@ -1,0 +1,10 @@
+{
+  "passed": true,
+  "installedApplication": true,
+  "automaticDemoBootstrap": true,
+  "realLocalMoodleLogin": true,
+  "selectedQuizAutomaticHandoff": true,
+  "signedMode": "strict",
+  "protectionPolicyUnchanged": true,
+  "cameraAndNativeRestrictions": "not started; stopped before consent"
+}

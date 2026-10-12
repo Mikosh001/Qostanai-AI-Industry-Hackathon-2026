@@ -220,6 +220,11 @@ function interruptionMessage(reason: string) {
     backend_or_guard_connection_lost:
       "Бақылау қызметімен байланыс жоғалды. Қосымшаны қайта іске қосыңыз.",
     guard_process_exited: "Windows қорғаныс қызметі жабылды.",
+    guard_inactive_during_focus_check: "Windows қорғаныс қызметі жабылды.",
+    foreground_verification_failed:
+      "Бақылау қызметімен байланыс жоғалды. Қосымшаны қайта іске қосыңыз.",
+    cannot_restore_exam_focus:
+      "Емтихан терезесіне оралу расталмады. Сессия тоқтатылып, компьютер шектеулері босатылды.",
     exam_open_failed:
       "Емтихан беті ашылмады. Moodle ортасының жұмысын тексеріңіз.",
   };
@@ -1117,9 +1122,9 @@ function Teacher({
   const [busy, setBusy] = useState(false);
   const [tab, setTab] = useState("overview");
   const [sessions, setSessions] = useState<any[]>([]);
-  const [pageOffset,setPageOffset]=useState(0);
-  const [sessionPage,setSessionPage]=useState<any>({total:0,counts:{}});
-  const [devices,setDevices]=useState<any[]>([]);
+  const [pageOffset, setPageOffset] = useState(0);
+  const [sessionPage, setSessionPage] = useState<any>({ total: 0, counts: {} });
+  const [devices, setDevices] = useState<any[]>([]);
   const [selected, setSelected] = useState("");
   const [detail, setDetail] = useState<any>(null);
   const [showTechnical, setShowTechnical] = useState(false);
@@ -1144,7 +1149,13 @@ function Teacher({
   const [note, setNote] = useState("");
   const [newKey, setNewKey] = useState("");
   const [moodleKey, setMoodleKey] = useState("");
-  const [hub, setHub] = useState({ enabled: false, url: "", pairing_key: "", device_id: "", device_key: "" });
+  const [hub, setHub] = useState({
+    enabled: false,
+    url: "",
+    pairing_key: "",
+    device_id: "",
+    device_key: "",
+  });
   const action = async (fn: () => Promise<void>) => {
     setError("");
     setBusy(true);
@@ -1158,7 +1169,12 @@ function Teacher({
   };
   const reload = useCallback(async () => {
     const [list, p, i, d] = await Promise.all([
-      api("/session-page?limit=100&offset="+pageOffset+"&q="+encodeURIComponent(query)),
+      api(
+        "/session-page?limit=100&offset=" +
+          pageOffset +
+          "&q=" +
+          encodeURIComponent(query),
+      ),
       api("/profile"),
       api("/integration"),
       api("/diagnostics"),
@@ -1167,10 +1183,10 @@ function Teacher({
     setSessionPage(list);
     setProfile((old: any) => old || p);
     setIntegration(i);
-    if(i.role === "hub")setDevices(await api("/integration/devices"));
+    if (i.role === "hub") setDevices(await api("/integration/devices"));
     setDiagnostics(d);
     if (selected) setDetail(await api("/sessions/" + selected));
-  }, [selected,pageOffset,query]);
+  }, [selected, pageOffset, query]);
   useEffect(() => {
     api("/auth/me")
       .then(() => setLogged(true))
@@ -1332,7 +1348,10 @@ function Teacher({
       </div>
     );
   const active = sessionPage.counts.active || 0;
-  const totalSessions = Object.values(sessionPage.counts).reduce<number>((sum,n:any)=>sum+n,0);
+  const totalSessions = Object.values(sessionPage.counts).reduce<number>(
+    (sum, n: any) => sum + n,
+    0,
+  );
   const allEvents = sessions.reduce((sum, s) => sum + s.event_count, 0);
   const filtered = sessions;
   return (
@@ -1464,9 +1483,7 @@ function Teacher({
                 <Stat
                   icon={ShieldCheck}
                   title={t("Аяқталған")}
-                  value={
-                    sessionPage.counts.completed || 0
-                  }
+                  value={sessionPage.counts.completed || 0}
                   detail={t("Есебі қарауға дайын")}
                 />
               </div>
@@ -1485,7 +1502,10 @@ function Teacher({
                     <input
                       value={query}
                       maxLength={160}
-                      onChange={(e) => {setPageOffset(0);setQuery(e.target.value)}}
+                      onChange={(e) => {
+                        setPageOffset(0);
+                        setQuery(e.target.value);
+                      }}
                       placeholder={t("Студент немесе емтихан")}
                     />
                   </div>
@@ -1552,11 +1572,31 @@ function Teacher({
                     </p>
                   </div>
                 )}
-                {sessionPage.total>100 && <div className="table-heading">
-                  <button className="btn secondary" disabled={pageOffset===0} onClick={()=>setPageOffset(Math.max(0,pageOffset-100))}>{t("Алдыңғы бет")}</button>
-                  <span>{pageOffset+1}–{Math.min(pageOffset+100,sessionPage.total)} / {sessionPage.total}</span>
-                  <button className="btn secondary" disabled={pageOffset+100>=sessionPage.total} onClick={()=>setPageOffset(pageOffset+100)}>{t("Келесі бет")}</button>
-                </div>}
+                {sessionPage.total > 100 && (
+                  <div className="table-heading">
+                    <button
+                      className="btn secondary"
+                      disabled={pageOffset === 0}
+                      onClick={() =>
+                        setPageOffset(Math.max(0, pageOffset - 100))
+                      }
+                    >
+                      {t("Алдыңғы бет")}
+                    </button>
+                    <span>
+                      {pageOffset + 1}–
+                      {Math.min(pageOffset + 100, sessionPage.total)} /{" "}
+                      {sessionPage.total}
+                    </span>
+                    <button
+                      className="btn secondary"
+                      disabled={pageOffset + 100 >= sessionPage.total}
+                      onClick={() => setPageOffset(pageOffset + 100)}
+                    >
+                      {t("Келесі бет")}
+                    </button>
+                  </div>
+                )}
               </section>
               {tab === "overview" && (
                 <div className="overview-bottom">
@@ -1640,7 +1680,11 @@ function Teacher({
                   >
                     JSON
                   </a>
-                  <a className="btn secondary" href={`/api/sessions/${selected}/report/signed`} download={`sergek-${selected}-signed.json`}>
+                  <a
+                    className="btn secondary"
+                    href={`/api/sessions/${selected}/report/signed`}
+                    download={`sergek-${selected}-signed.json`}
+                  >
                     {t("Қолтаңбалы есеп")}
                   </a>
                   {["active", "preflight"].includes(detail.session.status) && (
@@ -2013,15 +2057,51 @@ function Teacher({
                       "Қабылдаушы хаб HTTPS арқылы іске қосылады. Агент оқиғалар мен шифрланған сақтауға арналған бейнеүзінділерді синхрондайды.",
                     )}{" "}
                   </p>
-                  {integration?.role === "hub" && <button className="btn secondary wide" onClick={() => action(async () => {
-                    const device = await api("/integration/devices", "POST", {name:"Exam computer"});
-                    setNewKey(JSON.stringify(device, null, 2));
-                    await reload();
-                  })}>{t("Компьютерді тіркеу")}</button>}
-                  {devices.map(device=><div key={device.id} className="table-heading">
-                    <div><strong>{device.name}</strong><p>{device.id}</p></div>
-                    <button className="btn secondary" disabled={!!device.revoked || busy} onClick={()=>action(async()=>{await api("/integration/devices/"+device.id,"DELETE");await reload()})}>{t(device.revoked?"Құрылғы бұғатталған":"Құрылғы рұқсатын тоқтату")}</button>
-                  </div>)}
+                  {integration?.role === "hub" && (
+                    <button
+                      className="btn secondary wide"
+                      onClick={() =>
+                        action(async () => {
+                          const device = await api(
+                            "/integration/devices",
+                            "POST",
+                            { name: "Exam computer" },
+                          );
+                          setNewKey(JSON.stringify(device, null, 2));
+                          await reload();
+                        })
+                      }
+                    >
+                      {t("Компьютерді тіркеу")}
+                    </button>
+                  )}
+                  {devices.map((device) => (
+                    <div key={device.id} className="table-heading">
+                      <div>
+                        <strong>{device.name}</strong>
+                        <p>{device.id}</p>
+                      </div>
+                      <button
+                        className="btn secondary"
+                        disabled={!!device.revoked || busy}
+                        onClick={() =>
+                          action(async () => {
+                            await api(
+                              "/integration/devices/" + device.id,
+                              "DELETE",
+                            );
+                            await reload();
+                          })
+                        }
+                      >
+                        {t(
+                          device.revoked
+                            ? "Құрылғы бұғатталған"
+                            : "Құрылғы рұқсатын тоқтату",
+                        )}
+                      </button>
+                    </div>
+                  ))}
                   <label>
                     {t("Хаб HTTPS мекенжайы")}{" "}
                     <input
@@ -2030,7 +2110,16 @@ function Teacher({
                       placeholder="https://proctor.university.kz:8765"
                     />
                   </label>
-                  <label>{t("Тіркелген құрылғы ID")}<input value={hub.device_id} onChange={e=>setHub({...hub,device_id:e.target.value})} autoComplete="off" /></label>
+                  <label>
+                    {t("Тіркелген құрылғы ID")}
+                    <input
+                      value={hub.device_id}
+                      onChange={(e) =>
+                        setHub({ ...hub, device_id: e.target.value })
+                      }
+                      autoComplete="off"
+                    />
+                  </label>
                   <label>
                     {t("Құрылғының жеке кілті")}{" "}
                     <input

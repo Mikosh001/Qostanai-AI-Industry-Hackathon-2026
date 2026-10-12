@@ -243,6 +243,10 @@
     "ru": "Служба защиты Windows закрылась.",
     "en": "The Windows protection service stopped."
   },
+  "Емтихан терезесіне оралу расталмады. Сессия тоқтатылып, компьютер шектеулері босатылды.": {
+    "ru": "Возврат в окно экзамена не подтверждён. Сессия остановлена, ограничения компьютера сняты.",
+    "en": "Returning to the exam window could not be confirmed. The session stopped and computer restrictions were released."
+  },
   "Емтихан беті ашылмады. Moodle ортасының жұмысын тексеріңіз.": {
     "ru": "Страница экзамена не открылась. Проверьте работу Moodle.",
     "en": "The exam page did not open. Check the Moodle service."

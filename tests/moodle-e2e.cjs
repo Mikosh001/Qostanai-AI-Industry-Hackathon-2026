@@ -15,6 +15,7 @@ const fs = require("node:fs");
   const page = await context.newPage();
   let app;
   const loginTrace=[];
+  const lifecycle=[];
   try {
     page.setDefaultTimeout(30000);
     await page.goto("https://localhost/login/index.php");
@@ -56,6 +57,8 @@ const fs = require("node:fs");
       },
       timeout: 90000,
     });
+    app.context().on('close',()=>lifecycle.push({event:'context_closed',at:Date.now()}));
+    app.context().on('page',p=>p.on('close',()=>lifecycle.push({event:'page_closed',path:new URL(p.url()).pathname,at:Date.now()})));
     const local = await app.firstWindow();
     local.setDefaultTimeout(25000);
     // firstWindow can be returned while the hidden startup page is still loading.
@@ -404,10 +407,17 @@ const fs = require("node:fs");
       })
       .catch(() => {});
     console.error("Login cookie trace (hashes only):",JSON.stringify(loginTrace));
+    console.error("Electron lifecycle:",JSON.stringify(lifecycle));
+    console.error("Remaining Electron pages:",JSON.stringify(app?.context().pages().map(p=>({path:new URL(p.url()).pathname,closed:p.isClosed()}))||[]));
     console.error("Moodle test page:", page.url());
     throw error;
   } finally {
-    if (app) await app.close();
+    if (app) {
+      // Moodle's unsaved-answer beforeunload can cancel app.quit after a failed
+      // test. Destroy only this isolated fixture's windows before closing it.
+      await app.evaluate(({BrowserWindow})=>{for(const window of BrowserWindow.getAllWindows())window.destroy()}).catch(()=>{});
+      await app.close();
+    }
     await browser.close();
   }
 })().catch((e) => {

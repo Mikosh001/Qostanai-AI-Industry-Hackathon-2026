@@ -1,0 +1,20 @@
+{
+  "db": {
+    "owned": true,
+    "in_job": false
+  },
+  "php": {
+    "owned": true,
+    "in_job": false
+  },
+  "tls": {
+    "owned": true,
+    "in_job": false
+  },
+  "hub": {
+    "owned": true,
+    "in_job": false
+  },
+  "moodle_http_status": 200,
+  "hub_http_status": 200
+}

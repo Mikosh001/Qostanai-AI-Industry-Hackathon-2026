@@ -1,0 +1,23 @@
+{
+  "passed": true,
+  "moodle": "4.5.15",
+  "plugin": "quizaccess_sergek",
+  "signedIdentity": true,
+  "portalLogin": true,
+  "automaticallyOpenedFromSelectedQuiz": true,
+  "loginRetainedDuringHandoff": true,
+  "noStudentModeOrUrlOrTeacherPassword": true,
+  "automaticDemoBootstrap": false,
+  "automaticallyReleasedAfterMoodleSubmission": true,
+  "attemptSubmitted": true,
+  "protectionDeferredUntilAttempt": true,
+  "startupMilliseconds": 7601,
+  "persistedStart": "2026-10-12T14:02:28.360270+00:00",
+  "persistedEnd": "2026-10-12T14:04:21.556524+00:00",
+  "slowQuiz": true,
+  "firstProtectedPageUsableWithoutReload": true,
+  "serverGating": true,
+  "blockedResourcesAndWindowsAuditOnly": true,
+  "camera": "disabled administrative software test profile",
+  "data": "C:\\Users\\berdi\\Documents\\Codex\\2026-10-06\\new-chat\\work\\moodle-agent-1791813709864"
+}

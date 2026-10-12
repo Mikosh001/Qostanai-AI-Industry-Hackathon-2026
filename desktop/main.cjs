@@ -15,6 +15,7 @@ const net = require("node:net");
 const readline = require("node:readline");
 const { allowedUrl, blockedInput } = require("./policy.cjs");
 const { startProtectedExam } = require("./start-flow.cjs");
+const { createFocusRecovery } = require("./focus-recovery.cjs");
 const root = path.join(__dirname, "..");
 let window,
   examView,
@@ -77,6 +78,48 @@ async function captureExamSurface() {
 let pendingLaunch = "";
 let portalView, portalSession;
 let starting = false;
+let focusTimer;
+let interruption = null;
+const focusRecovery = createFocusRecovery({
+  read: () => guardCommand("foreground"),
+  restore: async () => {
+    if (!window || window.isDestroyed()) return;
+    if (window.isMinimized()) window.restore();
+    window.setAlwaysOnTop(true, "screen-saver");
+    window.focus();
+    (examView || portalView)?.webContents.focus();
+  },
+  record,
+  interrupt,
+});
+async function checkExamFocus() {
+  const item = current;
+  if (
+    !item ||
+    item.session.status !== "active" ||
+    interruption?.sid === item.session.id
+  )
+    return;
+  try {
+    await focusRecovery.check(
+      {
+        id: item.session.id,
+        strict: item.session.data.mode === "strict",
+        starting,
+      },
+      (sid) =>
+        current?.session.id === sid && current.session.status === "active",
+    );
+  } catch (error) {
+    log("native focus check: " + error.message);
+    if (
+      current?.session.id === item.session.id &&
+      current.session.status === "active" &&
+      !starting
+    )
+      await interrupt("foreground_verification_failed");
+  }
+}
 let pendingAttempt = null;
 const pending = new Map();
 const blockedAudit = new Map();
@@ -210,7 +253,7 @@ function startGuard() {
     try {
       const message = JSON.parse(line);
       if (message.type === "response") {
-        guardState = message.status;
+        guardState = { ...guardState, ...message.status };
         const task = pending.get(message.id);
         if (task) {
           clearTimeout(task.timer);
@@ -314,18 +357,18 @@ function closePortal(clear = false) {
 async function openPortal() {
   if (current) throw new Error("Алдыңғы сессияны аяқтаңыз");
   profile = await api("/api/profile");
-  const device=await api('/api/desktop/device');
+  const device = await api("/api/desktop/device");
   if (!allowedUrl(profile.moodle_url, profile.allowed_hosts))
     throw new Error("Moodle мекенжайын әкімші баптауы қажет");
   closePortal(true);
   window.webContents.send("sergek:launch", { portalAuthenticated: false });
   portalSession = session.fromPartition("sergek-portal-" + crypto.randomUUID());
   configureSession(portalSession);
-  portalSession.webRequest.onBeforeSendHeaders((details,callback)=>{
-    const headers={...details.requestHeaders};
-    if (new URL(details.url).origin===new URL(profile.moodle_url).origin)
-      headers['X-Sergek-Device']=device.device_id;
-    callback({requestHeaders:headers});
+  portalSession.webRequest.onBeforeSendHeaders((details, callback) => {
+    const headers = { ...details.requestHeaders };
+    if (new URL(details.url).origin === new URL(profile.moodle_url).origin)
+      headers["X-Sergek-Device"] = device.device_id;
+    callback({ requestHeaders: headers });
   });
   portalSession.webRequest.onBeforeRequest((details, callback) =>
     callback({
@@ -445,6 +488,10 @@ async function acceptPortalLaunch(url) {
 async function activateProtection() {
   guardFailure = "";
   window.setContentProtection(true);
+  window.setKiosk(true);
+  window.setAlwaysOnTop(true, "screen-saver");
+  window.show();
+  window.focus();
   const handle = window.getNativeWindowHandle();
   const hwnd =
     handle.length === 8
@@ -469,22 +516,29 @@ function startProgress(message) {
 async function loadExamPage(contents, url, options = {}) {
   let timer;
   try {
-    const {loadExamDocument}=require('./navigation.cjs');
+    const { loadExamDocument } = require("./navigation.cjs");
     await loadExamDocument({
-      expectedUrl:url,
-      alive:()=>!contents.isDestroyed() && !!current,
-      load:()=>
-    Promise.race([
-      contents.loadURL(url, options),
-      new Promise((_, reject) => {
-        timer = setTimeout(() => {
-          contents.stop();
-          reject(new Error("Moodle бетін жүктеу уақыты бітті. Қайта көріңіз."));
-        }, 15000);
+      expectedUrl: url,
+      alive: () => !contents.isDestroyed() && !!current,
+      load: () =>
+        Promise.race([
+          contents.loadURL(url, options),
+          new Promise((_, reject) => {
+            timer = setTimeout(() => {
+              contents.stop();
+              reject(
+                new Error("Moodle бетін жүктеу уақыты бітті. Қайта көріңіз."),
+              );
+            }, 15000);
+          }),
+        ]),
+      inspect: async () => ({
+        ...(await contents.executeJavaScript(
+          `({url:location.href,ready:document.readyState==='complete',content:!!document.querySelector('#region-main .que, #region-main form, #region-main h2')})`,
+        )),
+        ready: !contents.isLoadingMainFrame(),
       }),
-    ]),
-      inspect:async()=>({...(await contents.executeJavaScript(`({url:location.href,ready:document.readyState==='complete',content:!!document.querySelector('#region-main .que, #region-main form, #region-main h2')})`)),ready:!contents.isLoadingMainFrame()}),
-      protect:()=>protectExamPage(contents),
+      protect: () => protectExamPage(contents),
     });
   } finally {
     clearTimeout(timer);
@@ -503,7 +557,7 @@ async function protectExamPage(contents) {
     }
     return {ok:true};
   })()`);
-  if (!result?.ok) throw new Error('Exam protection initialization failed');
+  if (!result?.ok) throw new Error("Exam protection initialization failed");
 }
 async function openExam() {
   if (!current) return;
@@ -568,8 +622,13 @@ async function openExam() {
     const target = new URL(details.url);
     const selected = current?.session;
     const base = selected && new URL(selected.data.exam_url);
-    if (process.env.SERGEK_TESTING === '1' && details.resourceType === 'mainFrame')
-      log(`exam navigation: ${target.pathname} ${details.method} phase=${selected?.status} starting=${starting}`);
+    if (
+      process.env.SERGEK_TESTING === "1" &&
+      details.resourceType === "mainFrame"
+    )
+      log(
+        `exam navigation: ${target.pathname} ${details.method} phase=${selected?.status} starting=${starting}`,
+      );
     if (
       selected?.data.platform === "moodle" &&
       selected.status === "preflight" &&
@@ -645,12 +704,11 @@ async function openExam() {
   const contents = examView.webContents;
   contents.on("did-finish-load", () => {
     // Also cover a site's print button and DOM clipboard actions, not just shortcuts.
-    protectExamPage(contents)
-      .catch((error) => {
-        if (contents.isDestroyed() || contents.isLoadingMainFrame()) return;
-        log(error.message);
-        interrupt("exam_page_protection_failed");
-      });
+    protectExamPage(contents).catch((error) => {
+      if (contents.isDestroyed() || contents.isLoadingMainFrame()) return;
+      log(error.message);
+      interrupt("exam_page_protection_failed");
+    });
   });
   contents.setWindowOpenHandler(({ url }) => {
     auditBlocked("window_blocked", { host: urlHost(url) });
@@ -696,6 +754,7 @@ async function openExam() {
   startProgress("");
 }
 async function releaseGuard() {
+  focusRecovery.reset();
   try {
     await guardCommand("release");
   } catch (error) {
@@ -716,29 +775,39 @@ async function releaseGuard() {
 async function interrupt(reason) {
   if (!current) return;
   const sid = current.session.id;
+  if (interruption?.sid === sid) return interruption.promise;
+  const promise = Promise.resolve().then(async () => {
+    try {
+      await api("/api/desktop/interrupt", "POST", {
+        sid,
+        reason,
+      });
+      if (!current || current.session.id !== sid) return;
+      const snapshot = await api(
+        `/api/student/${current.session.id}/snapshot`,
+        "GET",
+        undefined,
+        true,
+      );
+      lastSnapshot = {
+        ...snapshot,
+        guard: guardState,
+        displays: screen.getAllDisplays().length,
+      };
+    } catch (error) {
+      log(error.message);
+    }
+    if (current?.session.id !== sid) return;
+    await releaseGuard();
+    closePortal(true);
+    current = null;
+  });
+  interruption = { sid, promise };
   try {
-    await api("/api/desktop/interrupt", "POST", {
-      sid,
-      reason,
-    });
-    if (!current || current.session.id !== sid) return;
-    const snapshot = await api(
-      `/api/student/${current.session.id}/snapshot`,
-      "GET",
-      undefined,
-      true,
-    );
-    lastSnapshot = {
-      ...snapshot,
-      guard: guardState,
-      displays: screen.getAllDisplays().length,
-    };
-  } catch (error) {
-    log(error.message);
+    await promise;
+  } finally {
+    if (interruption?.promise === promise) interruption = null;
   }
-  await releaseGuard();
-  closePortal(true);
-  current = null;
 }
 async function startCurrentExam() {
   if (!current) throw new Error("No active session");
@@ -807,7 +876,7 @@ async function startCurrentExam() {
           throw new Error(guardFailure || "Сессия тоқтатылды");
         if (current.session.data.mode === "strict") {
           window.setKiosk(true);
-          window.setAlwaysOnTop(true);
+          window.setAlwaysOnTop(true, "screen-saver");
         }
         await openExam();
         await record("session_started", {
@@ -871,7 +940,7 @@ ipcMain.handle("sergek:command", async (event, command, value) => {
       platform: process.platform,
       guard: guardState,
       launch: pendingLaunch,
-      examReady: current?.session.status === 'active' && !starting,
+      examReady: current?.session.status === "active" && !starting,
     };
   if (command === "open-portal") return openPortal();
   if (command === "close-portal") {
@@ -1132,29 +1201,7 @@ else {
           record("focus_lost", { blocked: false });
           return;
         }
-        setTimeout(() => {
-          if (
-            !window ||
-            window.isDestroyed() ||
-            current?.session.status !== "active"
-          )
-            return;
-          window.focus();
-          setTimeout(() => {
-            if (
-              !window ||
-              window.isDestroyed() ||
-              current?.session.status !== "active"
-            )
-              return;
-            const restored = window.isFocused();
-            record("focus_lost", {
-              blocked: restored,
-              action: "restore_exam_focus",
-            });
-            if (!restored) interrupt("cannot_restore_exam_focus");
-          }, 200);
-        }, 200);
+        checkExamFocus();
       });
       screen.on("display-added", () =>
         record("display_changed", { displays: screen.getAllDisplays().length }),
@@ -1179,6 +1226,7 @@ else {
       await window.loadURL(origin);
       window.show();
       surfaceTimer = setInterval(captureExamSurface, 400);
+      focusTimer = setInterval(checkExamFocus, 250);
       // Native recovery lease is independent of camera/backend HTTP processing.
       guardHeartbeat = setInterval(async () => {
         if (!current || guardHeartbeatBusy) return;
@@ -1244,6 +1292,7 @@ else {
     clearInterval(heartbeat);
     clearInterval(guardHeartbeat);
     clearInterval(surfaceTimer);
+    clearInterval(focusTimer);
     guard?.stdin.end();
     backend?.kill();
   });
