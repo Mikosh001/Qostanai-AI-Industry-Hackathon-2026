@@ -1,0 +1,46 @@
+{
+  "date": "2026-10-12",
+  "pytest": {
+    "name": "pytest",
+    "errors": "0",
+    "failures": "0",
+    "skipped": "0",
+    "tests": "176",
+    "time": "107.615"
+  },
+  "coverage": {
+    "covered_lines": 2062,
+    "num_statements": 2805,
+    "percent_covered": 69.52280516741365,
+    "percent_covered_display": "70",
+    "missing_lines": 743,
+    "excluded_lines": 0,
+    "percent_statements_covered": 73.51158645276293,
+    "percent_statements_covered_display": "74",
+    "num_branches": 988,
+    "num_partial_branches": 193,
+    "covered_branches": 575,
+    "missing_branches": 413,
+    "percent_branches_covered": 58.19838056680162,
+    "percent_branches_covered_display": "58"
+  },
+  "browser_tests": 12,
+  "desktop_tests": 16,
+  "native_global_restrictions_tested": false,
+  "operator_native_acceptance": "pending",
+  "backup_restore": {
+    "passed": true,
+    "scope": "offline whole directory, same Windows account; no cross-user/VM DPAPI claim",
+    "timestamps": true,
+    "encrypted_secret": true,
+    "encrypted_media": true,
+    "chain_and_anchor": true,
+    "report_trusted_key": true
+  },
+  "installer": {
+    "file": "Sergek Proctor Setup 1.5.0.exe",
+    "bytes": 342792728,
+    "sha256": "e58f0384b4d0e2f79bfca2003cc59b1a67e622c296ed3d0d5a739c42ad0f23b2",
+    "authenticode": false
+  }
+}

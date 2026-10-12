@@ -46,8 +46,6 @@ const fs = require("node:fs");
       p.policy.screen_recording = false;
       p.policy.microphone_required = false;
       p.exam_mode = "monitor";
-      p.policy.microphone_required = false;
-      p.exam_mode = "monitor";
       const r = await fetch("/api/profile", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -84,13 +82,9 @@ const fs = require("node:fs");
         modifiers: ["control"],
       });
     });
-    await expect
-      .poll(async () =>
-        page.evaluate(
-          async () => (await window.sergek.invoke("snapshot")).event_count,
-        ),
-      )
-      .toBeGreaterThan(0);
+    // Student review count excludes successful prevention. The teacher-side
+    // assertion below independently verifies the technical entry was persisted.
+    expect(await page.evaluate(async () => (await window.sergek.invoke("snapshot")).event_count)).toBe(0);
     fs.mkdirSync(path.join(root, "tests/browser/screens"), { recursive: true });
     await page.screenshot({
       path: path.join(root, "tests/browser/screens/local-exam.png"),

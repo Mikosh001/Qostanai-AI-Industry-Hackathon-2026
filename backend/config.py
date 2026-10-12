@@ -107,4 +107,6 @@ class AgentEvent(BaseModel):
 class HubConfig(BaseModel):
     url: str = ""
     pairing_key: str = ""
+    device_id: str = ""
+    device_key: str = ""
     enabled: bool = False

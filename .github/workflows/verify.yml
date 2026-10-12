@@ -1,0 +1,47 @@
+name: Verify Sergek
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: |
+            backend/requirements-build.lock.txt
+            tests/requirements.txt
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '8.0.x'
+      - name: Install test dependencies
+        run: python -m pip install -r tests/requirements.txt
+      - name: Backend and adversarial regressions
+        run: python -m pytest tests -q -o faulthandler_timeout=60 --cov=backend --cov-branch --cov-report=term-missing
+      - name: Reproducible UI installation
+        run: npm ci --ignore-scripts
+      - run: npm run build
+      - run: npm run test:desktop
+      - name: Compile native guard and run isolated self tests
+        shell: pwsh
+        run: |
+          dotnet build guard/Sergek.Guard.csproj -c Release --nologo
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          foreach ($test in @('--self-test', '--self-test-close', '--self-test-windows')) {
+            dotnet guard/bin/Release/net8.0-windows/Sergek.Guard.dll $test
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+      - name: Browser acceptance
+        shell: pwsh
+        run: |
+          $env:SERGEK_PYTHON = python -c "import sys; print(sys.executable)"
+          npm run test:ui
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

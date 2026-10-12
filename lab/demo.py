@@ -15,8 +15,8 @@ def prepare_demo(destination=None):
         "data": str(target.parent / "demo-agent"),
         "ca_file": str(LAB / "localhost.crt"),
         "profile": p.model_dump(),
-        "hub": HubConfig(enabled=True, url=meta["hub"], pairing_key=creds["hubkey"]).model_dump(),
-        "moodle_key": creds["sharedkey"],
+        "hub": HubConfig(enabled=True, url=meta["hub"], device_id=creds['device_id'],device_key=creds['device_key']).model_dump(),
+        "moodle_public_key": creds["moodle_public_key"],
         "teacher_password": creds["teacherpass"],
     }
     target.write_text(json.dumps(config, ensure_ascii=False, indent=2), encoding="utf-8")

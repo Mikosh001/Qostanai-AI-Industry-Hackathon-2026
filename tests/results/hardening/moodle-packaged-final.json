@@ -1,0 +1,22 @@
+{
+  "passed": true,
+  "moodle": "4.5.15",
+  "plugin": "quizaccess_sergek",
+  "signedIdentity": true,
+  "portalLogin": true,
+  "automaticallyOpenedFromSelectedQuiz": true,
+  "loginRetainedDuringHandoff": true,
+  "noStudentModeOrUrlOrTeacherPassword": true,
+  "automaticDemoBootstrap": false,
+  "automaticallyReleasedAfterMoodleSubmission": true,
+  "attemptSubmitted": true,
+  "protectionDeferredUntilAttempt": true,
+  "startupMilliseconds": 5123,
+  "persistedStart": "2026-10-12T11:36:25.557228+00:00",
+  "persistedEnd": "2026-10-12T11:38:06.577839+00:00",
+  "slowQuiz": true,
+  "firstProtectedPageUsableWithoutReload": true,
+  "serverGating": true,
+  "blockedResourcesAndWindowsAuditOnly": true,
+  "camera": "disabled administrative software test profile"
+}

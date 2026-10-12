@@ -6,7 +6,7 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone, timedelta
 import httpx
 import asyncio
-from fastapi import FastAPI, Request, HTTPException, Depends, Response
+from fastapi import FastAPI, Request, HTTPException, Depends, Response, Query
 from fastapi.responses import JSONResponse, FileResponse, StreamingResponse
 from .config import (
     DATA,
@@ -34,6 +34,10 @@ from .security import (
 from .engine import Engine
 from .reports import payload, pdf_report
 from .event_policy import annotate
+from . import trust as trust_protocol
+from . import sync_protocol
+from .hub_validation import validate_packet
+from .request_limits import RequestBodyLimit
 
 store = Store(DATA / "sergek.db")
 if os.environ.get("SERGEK_DEMO_CONFIG"):
@@ -45,6 +49,7 @@ teacher_tokens = {}
 student_tokens = {}
 camera_tickets = {}
 login_attempts = {}
+auth_lock = threading.RLock()
 heartbeats = {}
 maintenance_stop = threading.Event()
 hub_sync_lock = threading.RLock()
@@ -57,6 +62,10 @@ def profile():
     if saved.get('policy',{}).get('phone_confidence') == 0.4:
         saved['policy']['phone_confidence'] = 0.30
     return Profile.model_validate(saved)
+
+
+def secure_equal(left,right):
+    return isinstance(left,str) and isinstance(right,str) and hmac.compare_digest(left.encode('utf-8'),right.encode('utf-8'))
 
 
 def local_request(method, url, **kwargs):
@@ -79,6 +88,7 @@ def clean_session(item):
         return None
     result = json.loads(json.dumps(item))
     result["data"].pop("launch_token", None)
+    result["data"].pop("launch_proof", None)
     return result
 
 
@@ -90,7 +100,7 @@ def desktop(request: Request):
     value = request.headers.get("x-sergek-desktop", "")
     if (
         not DESKTOP_KEY
-        or not hmac.compare_digest(value, DESKTOP_KEY)
+        or not secure_equal(value, DESKTOP_KEY)
         or not is_loopback(request)
     ):
         raise HTTPException(403, "Desktop access required")
@@ -113,8 +123,8 @@ def session_auth(request: Request, sid: str):
 
 
 def allowed_exam(url, p):
-    target = urlparse(url)
     try:
+        target = urlparse(url)
         return (
             target.scheme == "https"
             and target.hostname in p.allowed_hosts
@@ -122,7 +132,7 @@ def allowed_exam(url, p):
             and not target.username
             and not target.password
         )
-    except ValueError:
+    except (ValueError, TypeError, AttributeError):
         return False
 
 
@@ -157,11 +167,53 @@ def maintenance():
 
 
 def synchronize():
+    if os.environ.get('SERGEK_SERVICE_ROLE')=='hub':return
     while not maintenance_stop.wait(5):
         try:
             sync_hub()
         except Exception:
             logging.exception("Hub synchronization failed")
+
+
+def renew_hub_leases():
+    while not maintenance_stop.wait(2):
+        try:
+            config=store.secret('hub',{})
+            if not config.get('enabled') or not config.get('device_id'):
+                continue
+            for item in store.sessions():
+                if item['data'].get('remote') or item['status'] not in ('active','preflight'):
+                    continue
+                if not store.setting('hub_lease:'+item['id']):
+                    continue  # Preparation is not registered until its first snapshot is accepted.
+                raw=sync_protocol.lease_packet(store,item['id'])
+                response=local_request('POST',config['url'].rstrip('/')+'/api/hub/lease',
+                    content=raw,headers=sync_protocol.headers(config,raw),verify=hub_trust(),timeout=2)
+                if response.status_code==403:
+                    apply_hub_stop(item,{'stop':True,'stop_reason':'device_revoked'})
+                    continue
+                response.raise_for_status()
+                state=response.json()
+                sync_protocol.acknowledge(store,item['id'],state)
+                store.set_setting('hub_lease:'+item['id'],state)
+                apply_hub_stop(item,state)
+        except Exception:
+            logging.exception('Hub lease renewal failed')
+
+
+def hub_trust():
+    return ssl.create_default_context(cafile=os.environ['SERGEK_CA_FILE']) if os.environ.get('SERGEK_CA_FILE') else True
+
+
+def apply_hub_stop(item,state):
+    if state.get('stop') and store.session(item['id'])['status'] in ('active','preflight'):
+        reason=state.get('stop_reason','teacher_stop')
+        store.add_event(item['id'], reason, {'source':'paired_hub'})
+        status='completed' if reason in ('moodle_submitted','teacher_stop') else 'interrupted'
+        store.update_session(item['id'],status,{'stop_reason':reason})
+        heartbeats.pop(item['id'],None)
+        if engine.sid==item['id']:
+            engine.stop_camera()
 
 
 def delete_data(sid):
@@ -200,11 +252,11 @@ def sync_revision(item, events):
 
 
 def _sync_hub(sids=None, control=False):
-    config = store.setting("hub", {})
+    config = store.secret("hub", {})
     if (
         not config.get("enabled")
         or not config.get("url")
-        or not config.get("pairing_key")
+        or not (config.get("device_key") or config.get("pairing_key"))
     ):
         return
     for item in (
@@ -229,6 +281,7 @@ def _sync_hub(sids=None, control=False):
                         decrypt(path.read_bytes(), media_key)
                     ).decode()
                     budget -= path.stat().st_size
+        receipt=store.setting('hub_anchor:'+item['id'],{'count':0,'head':'0'*64})
         packet = {
             "packet_id": uuid.uuid4().hex,
             "sent_at": time.time(),
@@ -236,16 +289,18 @@ def _sync_hub(sids=None, control=False):
             "events": events,
             "evidence": evidence,
         }
+        if config.get('device_id'):
+            count=receipt['count']
+            if count>len(events) or (count and events[count-1]['hash']!=receipt['head']):
+                raise ValueError('Local history no longer matches hub anchor')
+            packet.update(cursor=count,cursor_head=receipt['head'],events=events[count:],launch_token=item['data'].get('launch_proof',''))
         reference = DATA / "reference" / (item["id"] + ".sg")
-        if reference.exists():
+        if reference.exists() and not store.setting('synced_reference:'+item['id'],False):
             saved = json.loads(decrypt(reference.read_bytes(), media_key))
             packet["reference"] = {
                 k: v for k, v in saved.items() if k in ("photo", "enrolled_at", "model")
             }
         raw = canonical(packet)
-        signature = hmac.new(
-            config["pairing_key"].encode(), raw, hashlib.sha256
-        ).hexdigest()
         try:
             trust = (
                 ssl.create_default_context(cafile=os.environ["SERGEK_CA_FILE"])
@@ -255,16 +310,22 @@ def _sync_hub(sids=None, control=False):
             response = local_request("POST",
                 config["url"].rstrip("/") + "/api/hub/ingest",
                 content=raw,
-                headers={
-                    "x-sergek-signature": signature,
-                    "Content-Type": "application/json",
-                },
+                headers=sync_protocol.headers(config,raw),
                 timeout=2 if control else 8,
                 verify=trust,
             )
+            if response.status_code==507 and not control:
+                # Persist terminal/control state without media when the hub has
+                # no media capacity. Keep pending clips locally for later retry.
+                return _sync_hub([item['id']],control=True)
             response.raise_for_status()
+            state=response.json()
+            sync_protocol.acknowledge(store,item['id'],state)
+            if packet.get('reference'):store.set_setting('synced_reference:'+item['id'],True)
+            store.set_setting('hub_lease:'+item['id'],state)
             store.set_setting("hub_status", {"ok": True, "last_sync": utc()})
-            store.set_setting('synced_revision:'+item['id'], revision)
+            if {e['id'] for e in events if e['media']}.issubset(acknowledged.union(evidence)):
+                store.set_setting('synced_revision:'+item['id'], revision)
             store.set_setting(
                 "synced_media:" + item["id"], list(acknowledged.union(evidence))
             )
@@ -272,12 +333,7 @@ def _sync_hub(sids=None, control=False):
                 "active",
                 "preflight",
             ):
-                stop_reason = response.json().get("stop_reason", "teacher_stop")
-                store.add_event(item["id"], stop_reason, {"source": "paired_hub"})
-                store.update_session(item["id"], "completed")
-                heartbeats.pop(item["id"], None)
-                if engine.sid == item["id"]:
-                    engine.stop_camera()
+                apply_hub_stop(item,state)
             elif not control and item['status'] == 'active' and item['data'].get('platform') == 'moodle':
                 reconcile_moodle(item)
         except Exception as exc:
@@ -287,10 +343,27 @@ def _sync_hub(sids=None, control=False):
             return False
 
 
+def reconcile_remote_submissions():
+    # Backup for lost Moodle callbacks. A separate bounded worker pool cannot
+    # hold up desktop expiry, lease renewal or retention housekeeping.
+    from concurrent.futures import ThreadPoolExecutor
+    checked={}
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        while not maintenance_stop.wait(2):
+            if os.environ.get('SERGEK_SERVICE_ROLE')!='hub' or not store.secret('moodle_key',''):continue
+            items=[s for s in store.sessions() if s['data'].get('remote') and s['status']=='active' and s['data'].get('platform')=='moodle' and not s['data'].get('stop_requested')]
+            items.sort(key=lambda s:checked.get(s['id'],0))
+            pending=items[:32]
+            for item in pending:checked[item['id']]=time.monotonic()
+            list(pool.map(reconcile_moodle,pending))
+            live={s['id'] for s in items}
+            checked={sid:t for sid,t in checked.items() if sid in live}
+
+
 def reconcile_moodle(item):
     """Recover a lost submission callback using Moodle's signed server-side state."""
     from urllib.parse import urlsplit, urlunsplit
-    key = store.setting('moodle_key', '')
+    key = store.secret('moodle_key', '')
     signed = item['data'].get('moodle', {})
     if not key or not signed.get('nonce'):
         return
@@ -303,7 +376,11 @@ def reconcile_moodle(item):
         response.raise_for_status()
         result = response.json()
         if (result.get('state') == 'finished' and all(str(result.get(k)) == str(signed.get(k)) for k in ('nonce','userid','quizid'))):
-            store.update_session(item['id'], 'completed', {'stop_reason':'moodle_submitted', 'moodle_attempt':str(result['attemptid'])})
+            patch={'stop_reason':'moodle_submitted', 'moodle_attempt':str(result['attemptid'])}
+            if item['data'].get('remote'):
+                store.update_session(item['id'],patch={**patch,'stop_requested':True})
+            else:
+                store.update_session(item['id'],'completed',patch)
             store.audit('moodle_submission_reconciled', {'sid':item['id'],'attempt':str(result['attemptid'])})
             heartbeats.pop(item['id'], None)
             if engine.sid == item['id']:
@@ -330,6 +407,9 @@ async def lifespan(app):
     thread.start()
     sync_thread = threading.Thread(target=synchronize, daemon=True)
     sync_thread.start()
+    lease_thread=threading.Thread(target=renew_hub_leases,daemon=True)
+    lease_thread.start()
+    threading.Thread(target=reconcile_remote_submissions,daemon=True).start()
     yield
     maintenance_stop.set()
     engine.stop_camera()
@@ -337,7 +417,7 @@ async def lifespan(app):
         engine.vision.close()
 
 
-APP_VERSION = os.environ.get("SERGEK_VERSION", "1.4.3")
+APP_VERSION = os.environ.get("SERGEK_VERSION", "1.5.0")
 app = FastAPI(
     title="Sergek Proctor",
     version=APP_VERSION,
@@ -349,8 +429,13 @@ app = FastAPI(
 
 @app.middleware("http")
 async def protect(request, call_next):
+    measured=time.perf_counter()
     origin = request.headers.get("origin")
-    if origin and urlparse(origin).netloc != request.headers.get("host"):
+    try:
+        foreign_origin = bool(origin) and (urlparse(origin).netloc != request.headers.get("host") or urlparse(origin).scheme not in ("http", "https"))
+    except ValueError:
+        foreign_origin = True
+    if foreign_origin:
         return JSONResponse(
             {"detail": "Cross-origin request rejected"}, status_code=403
         )
@@ -365,6 +450,8 @@ async def protect(request, call_next):
     ):
         return JSONResponse({"detail": "Request too large"}, status_code=413)
     response = await call_next(request)
+    if os.environ.get('SERGEK_METRICS')=='1':
+        response.headers['X-Sergek-Server-Ms']=str(round((time.perf_counter()-measured)*1000,2))
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["Referrer-Policy"] = "no-referrer"
     response.headers["Cache-Control"] = (
@@ -374,6 +461,9 @@ async def protect(request, call_next):
         "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; media-src 'self' data:; object-src 'none'; frame-ancestors 'none'; base-uri 'self'"
     )
     return response
+
+
+app.add_middleware(RequestBodyLimit)
 
 
 @app.get("/api/health")
@@ -400,10 +490,12 @@ def authorize(value: Login):
 @app.post("/api/desktop/resolve-launch", dependencies=[Depends(desktop)])
 def resolve_launch(value: dict):
     try:
-        launch = verify_launch(
-            str(value.get("token", "")), store.setting("moodle_key", "")
+        launch = trust_protocol.verify_grant(
+            str(value.get("token", "")), store.setting("moodle_public_key", "")
         )
-        if not store.setting("moodle_key") or not allowed_exam(
+        if launch['device_id']!=store.secret('hub',{}).get('device_id'):
+            raise ValueError('Launch belongs to another computer')
+        if not store.setting("moodle_public_key") or not allowed_exam(
             launch["url"], profile()
         ):
             raise ValueError("Moodle launch is not configured or URL is not allowed")
@@ -416,6 +508,13 @@ def resolve_launch(value: dict):
         }
     except Exception as exc:
         raise HTTPException(403, str(exc))
+
+
+@app.get('/api/desktop/device',dependencies=[Depends(desktop)])
+def desktop_device():
+    did=store.secret('hub',{}).get('device_id','')
+    if not did:raise HTTPException(409,'This computer must be enrolled with the university hub')
+    return {'device_id':did}
 
 
 @app.post("/api/desktop/interrupt", dependencies=[Depends(desktop)])
@@ -457,12 +556,13 @@ def desktop_audit(value: dict):
 
 @app.post("/api/setup", dependencies=[Depends(desktop)])
 def setup(value: Login):
-    if store.setting("password"):
-        raise HTTPException(409, "Already configured")
     if len(value.password) < 12:
         raise HTTPException(422, "Құпиясөз кемінде 12 таңба болсын")
-    store.set_setting("password", hash_password(value.password))
-    store.audit("setup", {})
+    with store.lock:
+        if store.setting("password"):
+            raise HTTPException(409, "Already configured")
+        store.set_setting("password", hash_password(value.password))
+        store.audit("setup", {})
     return {"ok": True}
 
 
@@ -470,10 +570,11 @@ def setup(value: Login):
 def login(value: Login, request: Request, response: Response):
     address = request.client.host if request.client else "unknown"
     now = time.time()
-    attempts = [t for t in login_attempts.get(address, []) if now - t < 60]
-    if len(attempts) >= 5:
-        raise HTTPException(429, "Бір минуттан кейін қайталаңыз")
-    login_attempts[address] = attempts + [now]
+    with auth_lock:
+        attempts = [t for t in login_attempts.get(address, []) if now - t < 60]
+        if len(attempts) >= 5:
+            raise HTTPException(429, "Бір минуттан кейін қайталаңыз")
+        login_attempts[address] = attempts + [now]
     if not verify_password(value.password, store.setting("password", "")):
         raise HTTPException(401, "Құпиясөз қате")
     token = secrets.token_urlsafe(32)
@@ -486,7 +587,8 @@ def login(value: Login, request: Request, response: Response):
         secure=request.url.scheme == "https",
         max_age=8 * 3600,
     )
-    login_attempts[address] = []
+    with auth_lock:
+        login_attempts[address] = []
     store.audit("teacher_login", {"address": address})
     return {"ok": True}
 
@@ -557,11 +659,13 @@ def create_session(value: SessionCreate):
     data["mode"] = p.exam_mode
     nonce = ""
     if value.launch_token:
-        key = store.setting("moodle_key", "")
+        key = store.setting("moodle_public_key", "")
         if not key:
             raise HTTPException(409, "Moodle integration key is not configured")
         try:
-            launch = verify_launch(value.launch_token, key)
+            launch = trust_protocol.verify_grant(value.launch_token, key)
+            if launch['device_id']!=store.secret('hub',{}).get('device_id'):
+                raise ValueError('Launch belongs to another computer')
         except Exception as exc:
             raise HTTPException(403, str(exc))
         if not allowed_exam(launch["url"], p):
@@ -572,6 +676,7 @@ def create_session(value: SessionCreate):
             exam_url=launch["url"],
             platform="moodle",
             moodle=launch,
+            launch_proof=value.launch_token,
         )
         if launch.get("mode"):
             if launch["mode"] not in ("strict", "monitor"):
@@ -713,6 +818,9 @@ def start(sid: str, value: dict):
     item = store.session(sid)
     if not item or item["status"] != "preflight":
         raise HTTPException(409, "Not in preflight")
+    from .storage_budget import require_space
+    try:require_space(DATA)
+    except OSError as exc:raise HTTPException(507,str(exc))
     vision = engine.status()
     native = value.get("guard", {})
     desktop_state = value.get("desktop", {})
@@ -823,20 +931,15 @@ def moodle_ready(sid: str):
         if item['data']['policy'].get('camera_required') and not engine.status().get('identity_enrolled'):
             raise HTTPException(409, 'Фотоға түсіңіз')
         store.update_session(sid, patch={'moodle_prepared':True})
-    config = store.setting('hub', {})
-    key = store.setting('moodle_key', '')
+    config = store.secret('hub', {})
     nonce = item['data'].get('moodle', {}).get('nonce')
-    if not config.get('enabled') or not config.get('url') or not key or not nonce:
+    if not config.get('enabled') or not config.get('url') or not nonce:
         raise HTTPException(409, 'Moodle мен Sergек хабының байланысын әкімші баптауы қажет')
     synced = sync_hub([sid], control=True)
     if synced is False:
         return {'ready': False, 'message': 'Moodle байланысы қалпына келуде'}
     try:
-        trust = ssl.create_default_context(cafile=os.environ['SERGEK_CA_FILE']) if os.environ.get('SERGEK_CA_FILE') else True
-        response = local_request('GET',config['url'].rstrip('/') + '/api/moodle/status',
-            params={'nonce': nonce}, headers={'x-sergek-moodle': key}, verify=trust, timeout=2)
-        response.raise_for_status()
-        state = response.json()
+        state = store.setting('hub_lease:'+sid,{})
         ready = ((state.get('active') if item['status']=='active' else state.get('prepared')) is True and state.get('session_id') == sid
                  and state.get('mode') == item['data']['mode'])
         return {'ready': ready, 'message': '' if ready else 'Moodle қорғаныс сессиясын растауды күтіп тұр'}
@@ -930,12 +1033,22 @@ def answer(sid: str, value: dict):
 
 
 @app.get("/api/sessions", dependencies=[Depends(teacher)])
-def list_sessions():
-    return [
-        {**clean_session(s), "event_count": sum(annotate(e)["requires_review"] for e in store.events(s["id"])),
-         "journal_count": len(store.events(s["id"]))}
-        for s in store.sessions()
-    ]
+def list_sessions(limit: int=Query(100,ge=1,le=200),offset: int=Query(0,ge=0)):
+    sessions=store.sessions(limit,offset)
+    counts=store.event_counts([s['id'] for s in sessions])
+    return [{**clean_session(s),**counts[s['id']]} for s in sessions]
+
+
+@app.get('/api/session-page',dependencies=[Depends(teacher)])
+def session_page(limit: int=Query(100,ge=1,le=200),offset: int=Query(0,ge=0),q: str=Query('',max_length=160)):
+    sessions=store.sessions(limit,offset,q)
+    totals=store.event_counts([s['id'] for s in sessions])
+    items=[{**clean_session(s),**totals[s['id']]} for s in sessions]
+    with store.lock:
+        counts={r[0]:r[1] for r in store.db.execute('SELECT status,count(*) FROM sessions GROUP BY status')}
+        pattern='%'+q.replace('\\','\\\\').replace('%','\\%').replace('_','\\_')+'%'
+        total=store.db.execute("SELECT count(*) FROM sessions WHERE (coalesce(json_extract(data,'$.student'),'') || ' ' || coalesce(json_extract(data,'$.exam'),'')) LIKE ? ESCAPE '\\'",(pattern,)).fetchone()[0] if q else sum(counts.values())
+    return {'items':items,'total':total,'counts':counts,'offset':offset,'limit':limit}
 
 
 @app.get("/api/sessions/{sid}", dependencies=[Depends(teacher)])
@@ -984,7 +1097,11 @@ def evidence(eid: str):
     if not item or not item["media"]:
         raise HTTPException(404, "Evidence not yet available")
     store.audit("evidence_viewed", {"event_id": eid})
-    return engine.evidence(item)
+    try:
+        return engine.evidence(item)
+    except (ValueError,OSError) as exc:
+        store.audit('evidence_read_failed',{'event_id':eid,'error':str(exc)})
+        raise HTTPException(422,'Evidence integrity or storage check failed')
 
 
 @app.get("/api/sessions/{sid}/report/{format}", dependencies=[Depends(teacher)])
@@ -997,6 +1114,9 @@ def report(sid: str, format: str, lang: Literal["kk", "ru", "en"] = "kk"):
             media_type="application/json",
             headers={"Content-Disposition": f"attachment; filename=sergek-{sid}.json"},
         )
+    if format=='signed':
+        from .signed_export import sign_report
+        return JSONResponse(sign_report(store,payload(store,sid)),headers={'Content-Disposition':f'attachment; filename=sergek-{sid}-signed.json'})
     if format == "pdf":
         return Response(
             pdf_report(store, sid, lang),
@@ -1019,11 +1139,15 @@ def delete_session(sid: str):
 
 @app.get("/api/integration", dependencies=[Depends(teacher)])
 def integration():
+    from .signed_export import public_key
     return {
-        "moodle_configured": bool(store.setting("moodle_key")),
-        "hub_configured": bool(store.setting("hub_receive_key")),
+        "report_public_key": public_key(store),
+        "role": os.environ.get('SERGEK_SERVICE_ROLE','agent'),
+        "moodle_public_key": store.setting('moodle_public_key',''),
+        "moodle_configured": bool(store.setting("moodle_public_key")),
+        "hub_configured": bool(store.secret("hub_receive_key")) or bool(store.secret('hub',{}).get('device_id')),
         "hub": {
-            k: v for k, v in store.setting("hub", {}).items() if k != "pairing_key"
+            k: v for k, v in store.secret("hub", {}).items() if k not in ("pairing_key","device_key")
         },
         "status": store.setting("hub_status", {}),
     }
@@ -1034,15 +1158,21 @@ def rotate_key(value: dict):
     kind = value.get("kind")
     if kind not in ("moodle_key", "hub_receive_key"):
         raise HTTPException(422)
+    if os.environ.get('SERGEK_SERVICE_ROLE') != 'hub':
+        raise HTTPException(403,'Server credentials are managed on the central hub')
     key = secrets.token_urlsafe(40)
-    store.set_setting(kind, key)
+    store.set_secret(kind, key)
     store.audit("integration_key_rotated", {"kind": kind})
     return {"key": key}
 
 
 @app.put("/api/integration/hub", dependencies=[Depends(teacher)])
 def configure_hub(value: HubConfig):
-    parsed = urlparse(value.url)
+    try:
+        parsed = urlparse(value.url)
+        parsed.port  # Validate malformed port syntax too.
+    except ValueError:
+        raise HTTPException(422, "Invalid hub URL")
     if value.enabled and (
         parsed.scheme != "https"
         or not parsed.hostname
@@ -1050,49 +1180,99 @@ def configure_hub(value: HubConfig):
         or parsed.password
     ):
         raise HTTPException(422, "LAN hub requires HTTPS URL")
-    if value.enabled and len(value.pairing_key) < 32:
-        raise HTTPException(422, "Pairing key required")
-    store.set_setting("hub", value.model_dump())
+    if value.enabled and (len(value.device_key) < 32 or not __import__('backend.hub_validation',fromlist=['hex_id']).hex_id(value.device_id)):
+        raise HTTPException(422, "An enrolled device ID and device key are required")
+    store.set_secret("hub", value.model_dump())
     return {"ok": True}
 
 
 @app.put("/api/integration/moodle", dependencies=[Depends(teacher)])
 def configure_moodle(value: dict):
+    public=value.get('public_key','')
+    if public:
+        try:
+            if len(public)!=64:raise ValueError()
+            __import__('cryptography.hazmat.primitives.asymmetric.ed25519',fromlist=['Ed25519PublicKey']).Ed25519PublicKey.from_public_bytes(bytes.fromhex(public))
+        except (ValueError,TypeError):
+            raise HTTPException(422,'A 32-byte Ed25519 public key is required')
     key = value.get("key", "")
-    if not isinstance(key, str) or len(key) < 32 or len(key) > 256:
-        raise HTTPException(422, "Integration key must have 32–256 characters")
-    store.set_setting("moodle_key", key)
+    if key:
+        if os.environ.get('SERGEK_SERVICE_ROLE') != 'hub':
+            raise HTTPException(403,'Moodle server credentials must not be installed on an agent')
+        if not isinstance(key,str) or not 32<=len(key)<=256:
+            raise HTTPException(422, "Integration key must have 32–256 characters")
+        store.set_secret("moodle_key", key)
+    if not key and not public:
+        raise HTTPException(422,'Public verification key is required')
+    if public:store.set_setting('moodle_public_key',public)
     store.audit("moodle_key_imported", {})
     return {"ok": True}
 
 
 @app.post("/api/hub/ingest")
 async def ingest(request: Request):
-    key = store.setting("hub_receive_key", "")
     raw = await request.body()
     signature = request.headers.get("x-sergek-signature", "")
-    if not key or not hmac.compare_digest(
-        signature, hmac.new(key.encode(), raw, hashlib.sha256).hexdigest()
-    ):
-        raise HTTPException(403)
+    device_id = request.headers.get("x-sergek-device", "")
     from starlette.concurrency import run_in_threadpool
-    return await run_in_threadpool(ingest_packet, raw)
+    return await run_in_threadpool(accept_ingest,raw,device_id,signature)
 
 
-def ingest_packet(raw):
+def accept_ingest(raw,device_id,signature):
+    trust_protocol.initialize(store)
+    if device_id:
+        trust_protocol.authenticate(store, device_id, signature, raw)
+    else:
+        # Compatibility receiver for non-Moodle historical agents only. It can
+        # never activate a Moodle attempt. New provisioning issues device keys.
+        key = store.secret("hub_receive_key", "")
+        if not key or not secure_equal(signature, hmac.new(key.encode(), raw, hashlib.sha256).hexdigest()):
+            raise HTTPException(403)
+    return ingest_packet(raw, device_id)
+
+
+def ingest_packet(raw, device_id=""):
     # Packet validation and stop-state merge share one lock with teacher commands.
     # Offload filesystem/SQLite work so concurrent heartbeat requests stay responsive.
-    with store.lock:
-        try:
-            return _ingest_packet(raw)
-        except Exception:
-            store.db.rollback()
-            raise
-
-
-def _ingest_packet(raw):
+    staged={};installed=[];success=False
     try:
-        packet = json.loads(raw)
+        parsed=validate_packet(raw)
+        packet,decoded=parsed
+        if decoded or packet['session']['status']=='preflight' or not store.session(packet['session']['id']):
+            from .storage_budget import require_space
+            try:require_space(DATA,sum(len(v) for v in decoded.values())*2)
+            except OSError as exc:
+                sid=packet['session']['id'];current=store.session(sid)
+                if current and current['data'].get('device_id','')==device_id:
+                    store.update_session(sid,patch={'stop_requested':True,'stop_reason':'evidence_storage_low','evidence_incomplete':True})
+                raise HTTPException(507,str(exc))
+        # Decode, validate, encrypt and write large media before taking the
+        # database lock. Only atomic renames remain in the event transaction.
+        for eid,blob in decoded.items():
+            if device_id:
+                from .evidence_validation import validate_clip
+                validate_clip(blob,eid)
+            path=DATA/'staging'/(uuid.uuid4().hex+'.tmp');path.parent.mkdir(exist_ok=True)
+            staged[eid]=path;path.write_bytes(encrypt(blob,media_key))
+        with store.lock:
+            try:
+                result=_ingest_packet(raw,device_id,parsed,staged,installed)
+                success=True
+                return result
+            except Exception:
+                store.db.rollback()
+                raise
+    except (ValueError,TypeError,KeyError,OverflowError,RecursionError) as exc:
+        raise HTTPException(422,str(exc))
+    finally:
+        for path in staged.values():path.unlink(missing_ok=True)
+        if not success:
+            for path in installed:path.unlink(missing_ok=True)
+
+
+def _ingest_packet(raw, device_id="",parsed=None,staged=None,installed=None):
+    try:
+        packet, decoded_evidence = parsed or validate_packet(raw)
         packet_id = packet["packet_id"]
         sent_at = float(packet["sent_at"])
         item = packet["session"]
@@ -1110,7 +1290,7 @@ def _ingest_packet(raw):
             "interrupted",
         ) or not isinstance(item["data"], dict):
             raise ValueError("Invalid session")
-    except (KeyError, TypeError, ValueError) as exc:
+    except (KeyError, TypeError, ValueError, OverflowError, RecursionError) as exc:
         raise HTTPException(422, str(exc))
     with store.lock:
         try:
@@ -1118,15 +1298,32 @@ def _ingest_packet(raw):
                 "INSERT INTO received_packets VALUES(?,?)", (packet_id, time.time())
             )
             store.db.execute(
-                "DELETE FROM received_packets WHERE received<?", (time.time() - 3600,)
+                "DELETE FROM received_packets WHERE received<?", (time.time() - 120,)
             )
-            store.db.commit()
         except sqlite3.IntegrityError:
             store.db.rollback()
             raise HTTPException(409, "Packet replay rejected")
     if len(sid) != 32 or not all(c in "0123456789abcdef" for c in sid):
         raise HTTPException(422)
     current = store.session(sid)
+    if current and current['data'].get('device_id', '') != device_id:
+        raise HTTPException(403, "Session belongs to another device")
+    if item["data"].get("platform") == "moodle" or item["data"].get("moodle"):
+        try:
+            trust_protocol.bind(store, item, device_id, packet.get("launch_token", ""))
+        except ValueError as exc:
+            raise HTTPException(403,str(exc))
+    elif device_id:
+        item["data"]["device_id"] = device_id
+    if current:
+        for name in ("created",):
+            if item.get(name) != current.get(name):
+                raise HTTPException(409, "Session creation time is immutable")
+        if current.get('started') and item.get('started') != current['started'] and not current['data'].get('stop_requested'):
+            raise HTTPException(409, "Exam start time is immutable")
+        if current.get('ended') and item.get('ended')!=current['ended']:
+            raise HTTPException(409,'Exam end time is immutable')
+        if current['data'].get('reference_sha256'):item['data']['reference_sha256']=current['data']['reference_sha256']
     if current and not current["data"].get("remote"):
         raise HTTPException(409, "Local session conflict")
     if (
@@ -1147,9 +1344,33 @@ def _ingest_packet(raw):
         and current["data"].get("stop_requested")
         and item["status"] in ("active", "preflight")
     ):
+        store.db.commit()
         return {"stop": True, "stop_reason": current["data"].get("stop_reason", "teacher_stop")}
     events = packet.get("events", [])
-    previous = "0" * 64
+    incremental='cursor' in packet
+    existing=[] if incremental else store.events(sid)
+    total=len(events)
+    old_events={event['id']:event for event in existing}
+    previous='0'*64
+    if "cursor" in packet:
+        cursor = packet['cursor']
+        anchor=store.anchor(sid) or {'count':0,'head':'0'*64}
+        if not isinstance(cursor, int) or isinstance(cursor, bool) or cursor != anchor['count'] or packet.get('cursor_head') != anchor['head']:
+            raise HTTPException(409, "Event cursor mismatch")
+        previous=anchor['head'];total=cursor+len(events)
+        for eid in decoded_evidence:
+            old=store.event(eid)
+            if old and old['session_id']==sid:old_events[eid]=old
+    if not set(decoded_evidence).issubset({e['id'] for e in events}.union(old_events)):
+        raise HTTPException(422,'Evidence does not belong to this session')
+    if len(events) < len(existing) or any(
+        incoming["id"] != old["id"] or incoming["hash"] != old["hash"]
+        for incoming, old in zip(events, existing)
+    ):
+        raise HTTPException(409, "Existing event history cannot be rewritten or truncated")
+    for event in events[len(existing):]:
+        if store.event(event["id"]):
+            raise HTTPException(409, "Event ID already belongs to another session")
     for event in events:
         if len(event.get("id", "")) != 32 or not all(
             c in "0123456789abcdef" for c in event["id"]
@@ -1178,6 +1399,15 @@ def _ingest_packet(raw):
             raise HTTPException(422, "Invalid event chain")
         previous = event["hash"]
     reference = packet.get("reference")
+    if device_id and decoded_evidence:
+        from .evidence_validation import validate_clip
+        commitments=[e for e in events+store.events(sid) if e['kind']=='evidence_committed']
+        for eid,blob in decoded_evidence.items():
+            expected=[e['detail'].get('sha256') for e in commitments if e['detail'].get('event_id')==eid]
+            if not expected or expected[0]!=hashlib.sha256(blob).hexdigest():
+                raise HTTPException(422,'Evidence hash commitment missing or mismatched')
+            try:validate_clip(blob,eid)
+            except ValueError as exc:raise HTTPException(422,str(exc))
     if reference:
         photo = reference.get("photo", "")
         try:
@@ -1191,8 +1421,17 @@ def _ingest_packet(raw):
         except (ValueError, IndexError):
             raise HTTPException(422, "Invalid reference photo")
         path = DATA / "reference" / (sid + ".sg")
+        digest=hashlib.sha256(decoded).hexdigest()
+        expected=(current or {}).get('data',{}).get('reference_sha256')
+        if path.exists() and not expected:
+            saved=json.loads(decrypt(path.read_bytes(),media_key))
+            expected=hashlib.sha256(base64.b64decode(saved['photo'].split(',',1)[1])).hexdigest()
+        if expected and digest!=expected:raise HTTPException(409,'Enrollment photo is immutable')
+        item['data']['reference_sha256']=digest
         path.parent.mkdir(exist_ok=True)
-        path.write_bytes(
+        if not path.exists():
+            if installed is not None:installed.append(path)
+            path.write_bytes(
             encrypt(
                 json.dumps(
                     {
@@ -1217,21 +1456,23 @@ def _ingest_packet(raw):
             ),
         )
         for event in events:
-            old = store.event(event["id"])
+            old = old_events.get(event["id"])
             verdict = old["verdict"] if old else "pending"
             note = old["note"] if old else ""
             media = old["media"] if old else None
-            if event["id"] in packet.get("evidence", {}):
+            if event["id"] in decoded_evidence and not media:
                 media = event["id"] + ".sg"
                 path = DATA / "evidence" / media
                 path.parent.mkdir(exist_ok=True)
-                path.write_bytes(
-                    encrypt(
-                        base64.b64decode(packet["evidence"][event["id"]]), media_key
-                    )
-                )
+                if staged is not None:
+                    os.replace(staged[event['id']],path);installed.append(path)
+                else:path.write_bytes(encrypt(decoded_evidence[event['id']],media_key))
+            if old:
+                if media != old["media"]:
+                    store.db.execute("UPDATE events SET media=? WHERE id=?", (media, event["id"]))
+                continue
             store.db.execute(
-                "INSERT OR REPLACE INTO events VALUES(?,?,?,?,?,?,?,?,?,?)",
+                "INSERT INTO events VALUES(?,?,?,?,?,?,?,?,?,?)",
                 (
                     event["id"],
                     sid,
@@ -1245,14 +1486,122 @@ def _ingest_packet(raw):
                     note,
                 ),
             )
+        # Evidence can arrive after its event was already acknowledged.
+        for eid,blob in decoded_evidence.items():
+            if eid not in {e['id'] for e in events} and eid in old_events and not old_events[eid]['media']:
+                media=eid+'.sg';path=DATA/'evidence'/media
+                path.parent.mkdir(exist_ok=True)
+                if staged is not None:os.replace(staged[eid],path);installed.append(path)
+                else:path.write_bytes(encrypt(blob,media_key))
+                store.db.execute('UPDATE events SET media=? WHERE id=?',(media,eid))
+        store.update_anchor(sid, total, previous)
         store.db.commit()
-    return {"ok": True, "stop": False}
+    return {"ok": True, "stop": False, **lease_state(store.session(sid)), "anchor": {"count": total, "head": previous}}
+
+
+def lease_state(item):
+    fresh = not item['data'].get('remote') or (datetime.now(timezone.utc) - datetime.fromisoformat(item['data'].get('remote_last_seen',item['created']))).total_seconds() < 15
+    enrolled = not item['data'].get('device_id') or trust_protocol.device_live(store,item['data']['device_id'])
+    # A legacy client cannot manufacture a Moodle session by embedding claims.
+    authorized = item['data'].get('platform') != 'moodle' or bool(item['data'].get('device_id'))
+    ok = fresh and enrolled and authorized and not item['data'].get('stop_requested')
+    return {'active': item['status']=='active' and ok,
+            'prepared': item['status']=='preflight' and ok and bool(item['data'].get('moodle_prepared')),
+            'session_id':item['id'],'status':item['status'],'mode':item['data'].get('mode')}
+
+
+@app.post('/api/hub/lease')
+async def hub_lease(request: Request):
+    raw = await request.body()
+    did = request.headers.get('x-sergek-device','')
+    from starlette.concurrency import run_in_threadpool
+    return await run_in_threadpool(accept_lease,raw,did,request.headers.get('x-sergek-signature',''))
+
+
+def accept_lease(raw,did,signature):
+    trust_protocol.authenticate(store,did,signature,raw)
+    return renew_lease(raw,did)
+
+
+def renew_lease(raw, did):
+    try:
+        value=json.loads(raw)
+        if not isinstance(value,dict) or not __import__('backend.hub_validation',fromlist=['hex_id']).hex_id(value.get('packet_id')):
+            raise ValueError('Invalid lease packet')
+        sent=value.get('sent_at')
+        if isinstance(sent,bool) or not isinstance(sent,(int,float)) or not __import__('math').isfinite(sent) or abs(time.time()-sent)>30:
+            raise ValueError('Invalid lease time')
+        sid=value.get('session_id')
+        if not isinstance(sid,str):raise ValueError('Invalid session')
+    except (ValueError,TypeError,OverflowError):
+        raise HTTPException(422,'Invalid lease')
+    with store.lock:
+        item=store.session(sid)
+        if not item or item['data'].get('device_id') != did:
+            raise HTTPException(403,'Lease does not belong to device')
+        try:
+            store.db.execute('INSERT INTO received_packets VALUES(?,?)',(value['packet_id'],time.time()))
+        except sqlite3.IntegrityError:
+            store.db.rollback()
+            raise HTTPException(409,'Lease replay rejected')
+        anchor=store.anchor(sid)
+        claimed=value.get('anchor',{})
+        if not isinstance(claimed,dict) or isinstance(claimed.get('count'),bool) or not isinstance(claimed.get('count'),int) or claimed['count']<anchor['count'] or (claimed['count']==anchor['count'] and claimed.get('head')!=anchor['head']):
+            store.db.rollback()
+            raise HTTPException(409,'Agent event history was truncated or changed')
+        data=item['data'];data['remote_last_seen']=utc()
+        store.db.execute('UPDATE sessions SET data=? WHERE id=?',(json.dumps(data,ensure_ascii=False),sid))
+        store.db.commit()
+        stop=bool(data.get('stop_requested')) or item['status'] in ('completed','interrupted')
+        return {'ok':True,'stop':stop,'stop_reason':data.get('stop_reason','teacher_stop'),**lease_state(item),'anchor':anchor}
+
+
+@app.post('/api/moodle/issue')
+def issue_moodle(value: dict, request: Request):
+    key=store.secret('moodle_key','')
+    if not key or not secure_equal(request.headers.get('x-sergek-moodle',''),key):
+        raise HTTPException(403)
+    try:
+        claims=trust_protocol.verify_grant(value.get('token',''),store.setting('moodle_public_key',''))
+        if not allowed_exam(claims['url'],profile()):raise HTTPException(403,'Launch URL not configured')
+        trust_protocol.issue(store,value.get('token',''))
+    except ValueError as exc:
+        raise HTTPException(422,str(exc))
+    if not allowed_exam(claims['url'],profile()):
+        raise HTTPException(403,'Launch URL not configured')
+    return {'ok':True}
+
+
+@app.post('/api/integration/devices', dependencies=[Depends(teacher)])
+def enroll_device(value: dict):
+    if os.environ.get('SERGEK_SERVICE_ROLE') != 'hub':
+        raise HTTPException(409,'Enroll devices on the central hub')
+    result=trust_protocol.enroll(store,str(value.get('name','Exam computer')))
+    return {**result,'moodle_public_key':store.setting('moodle_public_key','')}
+
+
+@app.get('/api/integration/devices', dependencies=[Depends(teacher)])
+def list_devices():
+    trust_protocol.initialize(store)
+    with store.lock:
+        return [dict(r) for r in store.db.execute('SELECT id,name,revoked,created FROM devices ORDER BY created DESC')]
+
+
+@app.delete('/api/integration/devices/{did}', dependencies=[Depends(teacher)])
+def revoke_device(did: str):
+    trust_protocol.initialize(store)
+    with store.lock:
+        row=store.db.execute('UPDATE devices SET revoked=1 WHERE id=?',(did,))
+        store.db.commit()
+    if not row.rowcount:raise HTTPException(404)
+    store.audit('device_revoked',{'device_id':did})
+    return {'ok':True}
 
 
 @app.post("/api/moodle/finish")
 def moodle_finish(value: dict, request: Request):
-    key = store.setting("moodle_key", "")
-    if not key or not hmac.compare_digest(request.headers.get("x-sergek-moodle", ""), key):
+    key = store.secret("moodle_key", "")
+    if not key or not secure_equal(request.headers.get("x-sergek-moodle", ""), key):
         raise HTTPException(403)
     matching = store.session_by_nonce(str(value.get('nonce','')))
     for item in ([matching] if matching else []):
@@ -1278,30 +1627,14 @@ def moodle_finish(value: dict, request: Request):
 
 @app.get("/api/moodle/status")
 def moodle_status(nonce: str, request: Request):
-    key = store.setting("moodle_key", "")
-    if not key or not hmac.compare_digest(
+    key = store.secret("moodle_key", "")
+    if not key or not secure_equal(
         request.headers.get("x-sergek-moodle", ""), key
     ):
         raise HTTPException(403)
     item = store.session_by_nonce(nonce)
     if item:
-            fresh = (
-                not item["data"].get("remote")
-                or (
-                    datetime.now(timezone.utc)
-                    - datetime.fromisoformat(
-                        item["data"].get("remote_last_seen", item["created"])
-                    )
-                ).total_seconds()
-                < 15
-            )
-            return {
-                "active": item["status"] == "active" and fresh and not item["data"].get("stop_requested"),
-                "prepared": item['status'] == 'preflight' and fresh and bool(item['data'].get('moodle_prepared')),
-                "session_id": item["id"],
-                "status": item["status"],
-                "mode": item["data"].get("mode"),
-            }
+        return lease_state(item)
     return {"active": False, "status": "not_started"}
 
 

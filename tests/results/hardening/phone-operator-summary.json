@@ -1,0 +1,38 @@
+{
+  "scope": "Offline labelled video, frozen production detector and temporal rule; no OS/Moodle acceptance or population accuracy claim",
+  "manifest_sha256": "c2e779bf418e38695e38eb572694ed1d8696e55392d5c5307e72979b08d54ec5",
+  "model_sha256": "b77bf8e2b5a7d31b562f18ff2606329e45ccee138ce3956e1060b236a991eee0",
+  "sample_fps": 2,
+  "threshold": 0.3,
+  "sample_confusion": {
+    "tp": 49,
+    "fp": 4,
+    "fn": 14,
+    "tn": 55
+  },
+  "sample_precision": 0.9245283018867925,
+  "sample_recall": 0.7777777777777778,
+  "negative_hours": 0.008166666666666668,
+  "false_events": 0,
+  "false_events_per_hour": 0.0,
+  "zero_false_events_95_percent_upper_per_hour": 366.8243600270192,
+  "groups": {
+    "back/full": {
+      "episodes": 1,
+      "detected_episodes": 1
+    },
+    "front/hand_occlusion": {
+      "episodes": 1,
+      "detected_episodes": 1
+    },
+    "front/bottom_partial": {
+      "episodes": 1,
+      "detected_episodes": 1
+    },
+    "back/bottom_partial": {
+      "episodes": 1,
+      "detected_episodes": 1
+    }
+  },
+  "annotation_note": "One private operator recording, manual conservative intervals from visually reviewed 1s keyframes; transitions excluded. Actual instructions were not used as ground truth. Writer FPS differs from capture FPS; no real-time latency claim."
+}

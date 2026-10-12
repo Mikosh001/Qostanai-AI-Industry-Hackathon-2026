@@ -10,8 +10,8 @@ def config(tmp_path):
     value = {
         "data": str(tmp_path / "demo-agent"),
         "profile": Profile(tls_pins={"localhost": "a" * 64}).model_dump(),
-        "hub": {"enabled": True, "url": "https://localhost:9443", "pairing_key": "b" * 32},
-        "moodle_key": "c" * 32,
+        "hub": {"enabled": True, "url": "https://localhost:9443", "device_id":"b"*32,"device_key":"d"*48},
+        "moodle_public_key": "c" * 64,
         "teacher_password": "LocalDemoPassword123!",
     }
     path = tmp_path / "demo-config.json"

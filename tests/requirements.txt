@@ -1,2 +1,4 @@
 -r ../backend/requirements-build.lock.txt
 pypdf==6.19.0
+hypothesis==6.169.0
+pytest-cov==7.1.0

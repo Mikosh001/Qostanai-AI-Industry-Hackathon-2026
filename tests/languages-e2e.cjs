@@ -16,7 +16,7 @@ const launch = () => electron.launch({
     const page = await app.firstWindow();
     page.setDefaultTimeout(30000);
     await page.locator(".language-selector select").selectOption("en");
-    expect(await page.evaluate(async () => (await (await fetch("/api/health")).json()).version)).toBe("1.4.3");
+    expect(await page.evaluate(async () => (await (await fetch("/api/health")).json()).version)).toBe(require('../package.json').version);
     firstOrigin = new URL(page.url()).origin;
     await page.getByRole("button", { name: "Teacher dashboard" }).click();
     await page.getByLabel("Password", { exact: true }).fill("LanguageAcceptance123!");
@@ -60,7 +60,7 @@ const launch = () => electron.launch({
     const page = await app.firstWindow();
     await expect(page.locator(".language-selector select")).toHaveValue("en", { timeout: 30000 });
     await expect(page.getByRole("heading", { name: /Focus on your knowledge/ })).toBeVisible();
-    const result = { passed: true, version: "1.4.3", languages: ["kk", "ru", "en"], firstOrigin, secondOrigin: new URL(page.url()).origin,
+    const result = { passed: true, version: require('../package.json').version, languages: ["kk", "ru", "en"], firstOrigin, secondOrigin: new URL(page.url()).origin,
       packaged: Boolean(process.env.SERGEK_EXECUTABLE), savedAcrossRestart: true, activeSessionAndAnswerPreserved: true, invalidLanguageRejected: true, physicalProtectionTested: false };
     fs.writeFileSync(path.join(root, "tests/languages-v143.json"), JSON.stringify(result, null, 2));
     console.log(JSON.stringify(result));

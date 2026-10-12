@@ -7,8 +7,23 @@ final class launch {
         return json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
     }
     public static function sign(array $payload, string $key): string {
+        if (!function_exists('sodium_crypto_sign_detached') || strlen($key)!==64 || !ctype_xdigit($key)) {
+            throw new \moodle_exception('notconfigured','quizaccess_sergek');
+        }
         $raw = rtrim(strtr(base64_encode(self::canonical($payload)), '+/', '-_'), '=');
-        return $raw . '.' . hash_hmac('sha256', $raw, $key);
+        $pair=sodium_crypto_sign_seed_keypair(hex2bin($key));
+        $signature=sodium_crypto_sign_detached($raw,sodium_crypto_sign_secretkey($pair));
+        return 'SG2.'.$raw.'.'.rtrim(strtr(base64_encode($signature),'+/','-_'),'=');
+    }
+    public static function register(string $token): void {
+        $url=rtrim((string)get_config('quizaccess_sergek','huburl'),'/');
+        $key=(string)get_config('quizaccess_sergek','sharedkey');
+        if (strpos($url,'https://')!==0 || strlen($key)<32) { throw new \moodle_exception('notconfigured','quizaccess_sergek'); }
+        $curl=new \curl();
+        $curl->setHeader(['X-Sergek-Moodle: '.$key,'Content-Type: application/json']);
+        $raw=$curl->post($url.'/api/moodle/issue',json_encode(['token'=>$token]),['CURLOPT_TIMEOUT'=>5,'CURLOPT_SSL_VERIFYPEER'=>true]);
+        $result=json_decode($raw,true);
+        if ($curl->get_errno() || empty($result['ok'])) { throw new \moodle_exception('notconfigured','quizaccess_sergek'); }
     }
     public static function state(int $quizid, bool $renew = false): array {
         global $USER, $DB;

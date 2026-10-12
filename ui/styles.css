@@ -5,7 +5,7 @@
   font-synthesis: none;
   font-weight: 400;
   --blue: #225fe4;
-  --muted: #74829a;
+  --muted: #56677f;
   --border: #e5eaf3;
   --navy: #102444;
 }
@@ -100,7 +100,7 @@ small {
 }
 .brand > div > span {
   display: block;
-  color: #8090a8;
+  color: #56677f;
   font-size: 8px;
   letter-spacing: 3px;
   margin-top: 0;
@@ -399,9 +399,18 @@ label small {
   order: 5;
   margin-left: auto;
 }
-.login-top { align-items: center; gap: 20px; }
-.external-header > strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.external-header > .muted { font-size: 12px; }
+.login-top {
+  align-items: center;
+  gap: 20px;
+}
+.external-header > strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.external-header > .muted {
+  font-size: 12px;
+}
 .student-main {
   max-width: 1150px;
   width: 100%;
@@ -476,7 +485,7 @@ label small {
   display: flex;
   justify-content: space-between;
   font-size: 11px;
-  color: #94a0b3;
+  color: #56677f;
   border-top: 1px solid var(--border);
   padding: 20px 6%;
 }
@@ -809,7 +818,7 @@ label small {
   align-items: center;
   gap: 9px;
   margin: 0 8px 37px;
-  color: #71819a;
+  color: #56677f;
   font-size: 11px;
   line-height: 1.55;
 }
@@ -817,7 +826,7 @@ label small {
   font-size: 9px;
   font-weight: 650;
   letter-spacing: 1.1px;
-  color: #a0adbd;
+  color: #56677f;
   margin: 0 12px 14px;
 }
 .sidebar nav {
@@ -833,7 +842,7 @@ label small {
   background: transparent;
   border-radius: 8px;
   padding: 13px 12px;
-  color: #74859d;
+  color: #56677f;
   text-align: left;
   font-size: 12px;
   font-weight: 500;
@@ -855,7 +864,7 @@ label small {
   padding: 20px 10px 0;
   border-top: 1px solid var(--border);
   font-size: 11px;
-  color: #73859e;
+  color: #56677f;
 }
 .sidebar-bottom p {
   font-size: 11px;
@@ -867,7 +876,7 @@ label small {
   gap: 10px;
   border: none;
   background: transparent;
-  color: #8190a4;
+  color: #56677f;
   font-size: 12px;
   padding: 10px 0;
 }
@@ -891,7 +900,7 @@ label small {
   font-size: 12px;
 }
 .breadcrumb {
-  color: #99a7ba;
+  color: #56677f;
 }
 .dashboard-header > .btn {
   margin-left: auto;
@@ -923,7 +932,7 @@ label small {
 .stat > div {
   display: flex;
   justify-content: space-between;
-  color: #7589a5;
+  color: #56677f;
   font-size: 11px;
   margin-bottom: 14px;
 }
@@ -987,13 +996,13 @@ th {
   border-bottom: 1px solid var(--border);
   font-size: 9px;
   letter-spacing: 0.4px;
-  color: #8291a7;
+  color: #56677f;
   font-weight: 600;
 }
 td {
   padding: 19px 24px;
   border-bottom: 1px solid #eef1f6;
-  color: #7a8ba3;
+  color: #56677f;
 }
 td strong {
   display: block;
@@ -1014,7 +1023,7 @@ tbody tr:hover {
 .platform-tag {
   display: inline-block !important;
   font-size: 10px;
-  color: #6781a1;
+  color: #56677f;
   background: #f1f4f8;
   border-radius: 4px;
   padding: 4px 7px;
@@ -1368,4 +1377,76 @@ pre {
   margin-top: 14px;
 }
 
-.exam-loading{position:fixed;inset:76px 0 0;display:flex;flex-direction:column;justify-content:center;align-items:center;background:#f4f6fb;color:#173459;gap:12px}.exam-loading svg{color:#2461ea}.exam-loading p{color:#7487a7}
+.exam-loading {
+  position: fixed;
+  inset: 76px 0 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  background: #f4f6fb;
+  color: #173459;
+  gap: 12px;
+}
+.exam-loading svg {
+  color: #2461ea;
+}
+.exam-loading p {
+  color: #7487a7;
+}
+
+@media (max-width: 600px) {
+  .student-header,
+  .login-top,
+  .dashboard-header {
+    height: auto;
+    min-height: 80px;
+    flex-wrap: wrap;
+    gap: 14px;
+    padding: 18px;
+  }
+  .dashboard {
+    display: block;
+  }
+  .sidebar {
+    width: 100%;
+    padding: 18px;
+  }
+  .sidebar .brand {
+    margin-bottom: 16px;
+  }
+  .sidebar-university,
+  .nav-label,
+  .sidebar-bottom {
+    display: none;
+  }
+  .sidebar nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .sidebar nav button {
+    margin: 0;
+    padding: 10px;
+  }
+  .dashboard-body {
+    width: 100%;
+    min-width: 0;
+  }
+  .dashboard-main {
+    padding: 18px;
+  }
+  .dashboard-main > *,
+  .student-main > * {
+    min-width: 0;
+  }
+  .sessions-card {
+    overflow-x: auto;
+  }
+  .field-row {
+    flex-wrap: wrap;
+  }
+  .field-row > * {
+    min-width: 0;
+  }
+}

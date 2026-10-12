@@ -62,8 +62,8 @@ async function type(locator,text) {await locator.click();await locator.pressSequ
   await call('/auth/login','POST',{password:creds.teacherpass});
   const p=await call('/profile');p.exam_mode='monitor';p.policy.camera_required=true;p.policy.microphone_required=false;p.policy.screen_recording=true;
   p.allowed_hosts=['localhost'];p.moodle_url='https://localhost/';p.platonus_url='https://localhost/';p.tls_pins={localhost:meta.fingerprint};
-  await call('/profile','PUT',p);await call('/integration/moodle','PUT',{key:creds.sharedkey});
-  await call('/integration/hub','PUT',{enabled:true,url:meta.hub,pairing_key:creds.hubkey});await call('/auth/logout','POST');
+  await call('/profile','PUT',p);await call('/integration/moodle','PUT',{public_key:creds.moodle_public_key});
+  await call('/integration/hub','PUT',{enabled:true,url:meta.hub,device_id:creds.device_id,device_key:creds.device_key});await call('/auth/logout','POST');
   await local.goto(local.url().split('?')[0]);
   fs.writeFileSync(path.join(work,'camera/choice.txt'),'portrait.jpg');
   elapsed=Date.now();recording=true;

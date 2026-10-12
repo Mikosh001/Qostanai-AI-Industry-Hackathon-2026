@@ -6,15 +6,18 @@ require_login($cm->course, false, $cm);
 require_sesskey();
 $context = context_module::instance($cmid);
 require_capability('mod/quiz:attempt', $context);
-$key = (string)get_config('quizaccess_sergek','sharedkey');
-if (strlen($key)<32) { throw new moodle_exception('notconfigured','quizaccess_sergek'); }
+$key = (string)get_config('quizaccess_sergek','signingseed');
+if (strlen($key)!==64) { throw new moodle_exception('notconfigured','quizaccess_sergek'); }
 $state = \quizaccess_sergek\launch::state((int)$cm->instance, true);
+$device=$_SERVER['HTTP_X_SERGEK_DEVICE']??'';
+if (!preg_match('/^[0-9a-f]{32}$/D',$device)) { throw new moodle_exception('notconfigured','quizaccess_sergek'); }
 $mode=(string)get_config('quizaccess_sergek','minimum_mode');
 if (!in_array($mode,['strict','monitor'],true)) { $mode='strict'; }
-$payload = ['exp'=>time()+1800, 'nonce'=>$state['nonce'], 'userid'=>(string)$USER->id, 'mode'=>$mode,
+$payload = ['aud'=>'sergek-exam-v2','device_id'=>$device,'iat'=>time(),'exp'=>time()+1800, 'nonce'=>$state['nonce'], 'userid'=>(string)$USER->id, 'mode'=>$mode,
  'student_name'=>fullname($USER), 'exam_name'=>$cm->name,
  'quizid'=>(string)$cm->instance, 'url'=>(new moodle_url('/mod/quiz/view.php',['id'=>$cmid]))->out(false)];
 $token = \quizaccess_sergek\launch::sign($payload,$key);
+\quizaccess_sergek\launch::register($token);
 $PAGE->set_url(new moodle_url('/mod/quiz/accessrule/sergek/launch.php',['cmid'=>$cmid]));
 $PAGE->set_context($context);$PAGE->set_title(get_string('pluginname','quizaccess_sergek'));
 echo $OUTPUT->header();

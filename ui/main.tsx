@@ -223,8 +223,10 @@ function interruptionMessage(reason: string) {
     exam_open_failed:
       "Емтихан беті ашылмады. Moodle ортасының жұмысын тексеріңіз.",
   };
-  return t(messages[reason] ||
-    "Бақылау талаптарының бірі орындалмады. Нақты себеп оқиғалар журналында сақталды.");
+  return t(
+    messages[reason] ||
+      "Бақылау талаптарының бірі орындалмады. Нақты себеп оқиғалар журналында сақталды.",
+  );
 }
 
 function App() {
@@ -1109,11 +1111,15 @@ function Teacher({
   onSetup: () => void;
 }) {
   const [logged, setLogged] = useState(false);
+  const [syncError, setSyncError] = useState(false);
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [tab, setTab] = useState("overview");
   const [sessions, setSessions] = useState<any[]>([]);
+  const [pageOffset,setPageOffset]=useState(0);
+  const [sessionPage,setSessionPage]=useState<any>({total:0,counts:{}});
+  const [devices,setDevices]=useState<any[]>([]);
   const [selected, setSelected] = useState("");
   const [detail, setDetail] = useState<any>(null);
   const [showTechnical, setShowTechnical] = useState(false);
@@ -1138,7 +1144,7 @@ function Teacher({
   const [note, setNote] = useState("");
   const [newKey, setNewKey] = useState("");
   const [moodleKey, setMoodleKey] = useState("");
-  const [hub, setHub] = useState({ enabled: false, url: "", pairing_key: "" });
+  const [hub, setHub] = useState({ enabled: false, url: "", pairing_key: "", device_id: "", device_key: "" });
   const action = async (fn: () => Promise<void>) => {
     setError("");
     setBusy(true);
@@ -1152,17 +1158,19 @@ function Teacher({
   };
   const reload = useCallback(async () => {
     const [list, p, i, d] = await Promise.all([
-      api("/sessions"),
+      api("/session-page?limit=100&offset="+pageOffset+"&q="+encodeURIComponent(query)),
       api("/profile"),
       api("/integration"),
       api("/diagnostics"),
     ]);
-    setSessions(list);
+    setSessions(list.items);
+    setSessionPage(list);
     setProfile((old: any) => old || p);
     setIntegration(i);
+    if(i.role === "hub")setDevices(await api("/integration/devices"));
     setDiagnostics(d);
     if (selected) setDetail(await api("/sessions/" + selected));
-  }, [selected]);
+  }, [selected,pageOffset,query]);
   useEffect(() => {
     api("/auth/me")
       .then(() => setLogged(true))
@@ -1170,9 +1178,23 @@ function Teacher({
   }, []);
   useEffect(() => {
     if (!logged) return;
-    reload().catch((e) => setError(e.message));
-    const id = setInterval(() => reload().catch(() => {}), 3000);
-    return () => clearInterval(id);
+    let alive = true;
+    let timer: ReturnType<typeof setTimeout>;
+    const poll = async () => {
+      try {
+        await reload();
+        if (alive) setSyncError(false);
+      } catch {
+        if (alive) setSyncError(true);
+      } finally {
+        if (alive) timer = setTimeout(poll, 3000);
+      }
+    };
+    poll();
+    return () => {
+      alive = false;
+      clearTimeout(timer);
+    };
   }, [logged, reload]);
   useEffect(() => {
     if (!playing || !evidence) return;
@@ -1309,13 +1331,10 @@ function Teacher({
         </div>
       </div>
     );
-  const active = sessions.filter((s) => s.status === "active").length;
+  const active = sessionPage.counts.active || 0;
+  const totalSessions = Object.values(sessionPage.counts).reduce<number>((sum,n:any)=>sum+n,0);
   const allEvents = sessions.reduce((sum, s) => sum + s.event_count, 0);
-  const filtered = sessions.filter((s) =>
-    (s.data.student + " " + s.data.exam)
-      .toLowerCase()
-      .includes(query.toLowerCase()),
-  );
+  const filtered = sessions;
   return (
     <div className="dashboard">
       <aside className="sidebar">
@@ -1344,7 +1363,7 @@ function Teacher({
             >
               <Icon size={19} />
               {title}
-              {id === "sessions" && <span>{sessions.length}</span>}
+              {id === "sessions" && <span>{totalSessions}</span>}
             </button>
           ))}
         </nav>
@@ -1368,6 +1387,9 @@ function Teacher({
         </div>
       </aside>
       <div className="dashboard-body">
+        {syncError && (
+          <ErrorBox error="Байланыс үзілді. Панельдегі деректер ескірген болуы мүмкін." />
+        )}
         <header className="dashboard-header">
           <LanguageSelector />
           <div>
@@ -1424,7 +1446,7 @@ function Teacher({
                 <Stat
                   icon={Monitor}
                   title={t("Барлық сессия")}
-                  value={sessions.length}
+                  value={totalSessions}
                   detail={t("Сақталған емтихан сессиялары")}
                 />
                 <Stat
@@ -1437,28 +1459,33 @@ function Teacher({
                   icon={Eye}
                   title={t("Тексерілетін оқиға")}
                   value={allEvents}
-                  detail={t("Автоматты айыптау емес")}
+                  detail={t("Ағымдағы беттегі оқиғалар")}
                 />
                 <Stat
                   icon={ShieldCheck}
                   title={t("Аяқталған")}
                   value={
-                    sessions.filter((s) => s.status === "completed").length
+                    sessionPage.counts.completed || 0
                   }
                   detail={t("Есебі қарауға дайын")}
                 />
               </div>
-              <section className="card sessions-card">
+              <section
+                className="card sessions-card"
+                tabIndex={0}
+                aria-labelledby="sessions-heading"
+              >
                 <div className="table-heading">
                   <div>
-                    <h2>{t("Сессиялар")}</h2>
+                    <h2 id="sessions-heading">{t("Сессиялар")}</h2>
                     <p>{t("Емтиханды таңдап, оқиғаларды тексеріңіз.")}</p>
                   </div>
                   <div className="search">
                     <Search size={17} />
                     <input
                       value={query}
-                      onChange={(e) => setQuery(e.target.value)}
+                      maxLength={160}
+                      onChange={(e) => {setPageOffset(0);setQuery(e.target.value)}}
                       placeholder={t("Студент немесе емтихан")}
                     />
                   </div>
@@ -1525,6 +1552,11 @@ function Teacher({
                     </p>
                   </div>
                 )}
+                {sessionPage.total>100 && <div className="table-heading">
+                  <button className="btn secondary" disabled={pageOffset===0} onClick={()=>setPageOffset(Math.max(0,pageOffset-100))}>{t("Алдыңғы бет")}</button>
+                  <span>{pageOffset+1}–{Math.min(pageOffset+100,sessionPage.total)} / {sessionPage.total}</span>
+                  <button className="btn secondary" disabled={pageOffset+100>=sessionPage.total} onClick={()=>setPageOffset(pageOffset+100)}>{t("Келесі бет")}</button>
+                </div>}
               </section>
               {tab === "overview" && (
                 <div className="overview-bottom">
@@ -1562,6 +1594,9 @@ function Teacher({
           )}
           {selected && detail && (
             <>
+              {detail.session.data.evidence_incomplete && (
+                <ErrorBox error="Дәлелдердің бір бөлігі сақталмады. Техникалық журналды тексеріңіз." />
+              )}
               <button
                 className="btn text back"
                 onClick={() => {
@@ -1604,6 +1639,9 @@ function Teacher({
                     download={`sergek-${selected}.json`}
                   >
                     JSON
+                  </a>
+                  <a className="btn secondary" href={`/api/sessions/${selected}/report/signed`} download={`sergek-${selected}-signed.json`}>
+                    {t("Қолтаңбалы есеп")}
                   </a>
                   {["active", "preflight"].includes(detail.session.status) && (
                     <button
@@ -1935,27 +1973,9 @@ function Teacher({
                         : "not configured"
                     }
                   />
-                  <button
-                    className="btn secondary wide"
-                    onClick={() =>
-                      action(async () => {
-                        setNewKey(
-                          (
-                            await api("/integration/rotate-key", "POST", {
-                              kind: "moodle_key",
-                            })
-                          ).key,
-                        );
-                        await reload();
-                      })
-                    }
-                  >
-                    {t("Интеграция кілтін жасау / ауыстыру")}{" "}
-                  </button>
                   <label>
-                    {t("Ортақ Moodle кілтін импорттау")}{" "}
+                    {t("Moodle ашық тексеру кілті (Ed25519)")}{" "}
                     <input
-                      type="password"
                       value={moodleKey}
                       onChange={(e) => setMoodleKey(e.target.value)}
                       autoComplete="off"
@@ -1963,11 +1983,11 @@ function Teacher({
                   </label>
                   <button
                     className="btn secondary wide"
-                    disabled={moodleKey.length < 32}
+                    disabled={moodleKey.length !== 64}
                     onClick={() =>
                       action(async () => {
                         await api("/integration/moodle", "PUT", {
-                          key: moodleKey,
+                          public_key: moodleKey,
                         });
                         setMoodleKey("");
                         await reload();
@@ -1993,23 +2013,15 @@ function Teacher({
                       "Қабылдаушы хаб HTTPS арқылы іске қосылады. Агент оқиғалар мен шифрланған сақтауға арналған бейнеүзінділерді синхрондайды.",
                     )}{" "}
                   </p>
-                  <button
-                    className="btn secondary wide"
-                    onClick={() =>
-                      action(async () => {
-                        setNewKey(
-                          (
-                            await api("/integration/rotate-key", "POST", {
-                              kind: "hub_receive_key",
-                            })
-                          ).key,
-                        );
-                        await reload();
-                      })
-                    }
-                  >
-                    {t("Хабтың жұптау кілтін жасау")}{" "}
-                  </button>
+                  {integration?.role === "hub" && <button className="btn secondary wide" onClick={() => action(async () => {
+                    const device = await api("/integration/devices", "POST", {name:"Exam computer"});
+                    setNewKey(JSON.stringify(device, null, 2));
+                    await reload();
+                  })}>{t("Компьютерді тіркеу")}</button>}
+                  {devices.map(device=><div key={device.id} className="table-heading">
+                    <div><strong>{device.name}</strong><p>{device.id}</p></div>
+                    <button className="btn secondary" disabled={!!device.revoked || busy} onClick={()=>action(async()=>{await api("/integration/devices/"+device.id,"DELETE");await reload()})}>{t(device.revoked?"Құрылғы бұғатталған":"Құрылғы рұқсатын тоқтату")}</button>
+                  </div>)}
                   <label>
                     {t("Хаб HTTPS мекенжайы")}{" "}
                     <input
@@ -2018,13 +2030,14 @@ function Teacher({
                       placeholder="https://proctor.university.kz:8765"
                     />
                   </label>
+                  <label>{t("Тіркелген құрылғы ID")}<input value={hub.device_id} onChange={e=>setHub({...hub,device_id:e.target.value})} autoComplete="off" /></label>
                   <label>
-                    {t("Жұптау кілті")}{" "}
+                    {t("Құрылғының жеке кілті")}{" "}
                     <input
                       type="password"
-                      value={hub.pairing_key}
+                      value={hub.device_key}
                       onChange={(e) =>
-                        setHub({ ...hub, pairing_key: e.target.value })
+                        setHub({ ...hub, device_key: e.target.value })
                       }
                     />
                   </label>

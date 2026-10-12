@@ -314,12 +314,19 @@ function closePortal(clear = false) {
 async function openPortal() {
   if (current) throw new Error("Алдыңғы сессияны аяқтаңыз");
   profile = await api("/api/profile");
+  const device=await api('/api/desktop/device');
   if (!allowedUrl(profile.moodle_url, profile.allowed_hosts))
     throw new Error("Moodle мекенжайын әкімші баптауы қажет");
   closePortal(true);
   window.webContents.send("sergek:launch", { portalAuthenticated: false });
   portalSession = session.fromPartition("sergek-portal-" + crypto.randomUUID());
   configureSession(portalSession);
+  portalSession.webRequest.onBeforeSendHeaders((details,callback)=>{
+    const headers={...details.requestHeaders};
+    if (new URL(details.url).origin===new URL(profile.moodle_url).origin)
+      headers['X-Sergek-Device']=device.device_id;
+    callback({requestHeaders:headers});
+  });
   portalSession.webRequest.onBeforeRequest((details, callback) =>
     callback({
       cancel:
@@ -462,7 +469,12 @@ function startProgress(message) {
 async function loadExamPage(contents, url, options = {}) {
   let timer;
   try {
-    await Promise.race([
+    const {loadExamDocument}=require('./navigation.cjs');
+    await loadExamDocument({
+      expectedUrl:url,
+      alive:()=>!contents.isDestroyed() && !!current,
+      load:()=>
+    Promise.race([
       contents.loadURL(url, options),
       new Promise((_, reject) => {
         timer = setTimeout(() => {
@@ -470,10 +482,28 @@ async function loadExamPage(contents, url, options = {}) {
           reject(new Error("Moodle бетін жүктеу уақыты бітті. Қайта көріңіз."));
         }, 15000);
       }),
-    ]);
+    ]),
+      inspect:async()=>({...(await contents.executeJavaScript(`({url:location.href,ready:document.readyState==='complete',content:!!document.querySelector('#region-main .que, #region-main form, #region-main h2')})`)),ready:!contents.isLoadingMainFrame()}),
+      protect:()=>protectExamPage(contents),
+    });
   } finally {
     clearTimeout(timer);
   }
+}
+async function protectExamPage(contents) {
+  const result = await contents.executeJavaScript(`(() => {
+    if (window.print?.__sergekBlocked) return {ok:true};
+    const blockedPrint = () => {};
+    Object.defineProperty(blockedPrint, '__sergekBlocked', {value:true});
+    Object.defineProperty(window, 'print', {value:blockedPrint,configurable:false,writable:false});
+    if (${JSON.stringify(!profile.policy.copy_paste)}) {
+      for (const kind of ['copy','cut','paste']) document.addEventListener(kind,event=>{
+        event.preventDefault(); event.stopImmediatePropagation();
+      },true);
+    }
+    return {ok:true};
+  })()`);
+  if (!result?.ok) throw new Error('Exam protection initialization failed');
 }
 async function openExam() {
   if (!current) return;
@@ -538,6 +568,8 @@ async function openExam() {
     const target = new URL(details.url);
     const selected = current?.session;
     const base = selected && new URL(selected.data.exam_url);
+    if (process.env.SERGEK_TESTING === '1' && details.resourceType === 'mainFrame')
+      log(`exam navigation: ${target.pathname} ${details.method} phase=${selected?.status} starting=${starting}`);
     if (
       selected?.data.platform === "moodle" &&
       selected.status === "preflight" &&
@@ -611,33 +643,11 @@ async function openExam() {
   window.contentView.addChildView(examView);
   layoutExam();
   const contents = examView.webContents;
-  contents.on("dom-ready", () => {
+  contents.on("did-finish-load", () => {
     // Also cover a site's print button and DOM clipboard actions, not just shortcuts.
-    const disableClipboard = !profile.policy.copy_paste;
-    contents
-      .executeJavaScript(
-        `(() => {
-      try {
-      if (window.print?.__sergekBlocked) return {ok:true};
-      const blockedPrint = () => {};
-      Object.defineProperty(blockedPrint, '__sergekBlocked', {value:true});
-      Object.defineProperty(window, 'print', {value: blockedPrint, configurable: false, writable: false});
-      if (${JSON.stringify(disableClipboard)}) {
-        for (const kind of ['copy', 'cut', 'paste']) document.addEventListener(kind, event => {
-          event.preventDefault(); event.stopImmediatePropagation();
-        }, true);
-      }
-      return {ok:true};
-      } catch(error) {return {ok:false,error:String(error)};}
-    })()`,
-      )
-      .then((result) => {
-        if (!result?.ok)
-          throw new Error(
-            result?.error || "Exam protection initialization failed",
-          );
-      })
+    protectExamPage(contents)
       .catch((error) => {
+        if (contents.isDestroyed() || contents.isLoadingMainFrame()) return;
         log(error.message);
         interrupt("exam_page_protection_failed");
       });
@@ -861,6 +871,7 @@ ipcMain.handle("sergek:command", async (event, command, value) => {
       platform: process.platform,
       guard: guardState,
       launch: pendingLaunch,
+      examReady: current?.session.status === 'active' && !starting,
     };
   if (command === "open-portal") return openPortal();
   if (command === "close-portal") {

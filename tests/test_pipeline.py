@@ -133,3 +133,24 @@ def test_ten_capture_restarts_release_workers_and_clear_prior_buffers(monkeypatc
             assert all(not thread.is_alive() for thread in workers)
             assert not engine.pending and not engine.writes and engine.sid is None
     finally:engine.stop_camera();engine.writer.shutdown()
+
+
+def test_final_evidence_disk_failure_releases_session_and_records_incompleteness(monkeypatch, tmp_path):
+    monkeypatch.setattr(Engine, '_load', lambda self: setattr(self, 'loading', False))
+    store = Store(tmp_path/'db.sqlite')
+    sid = store.create_session({'student': 'Fixture', 'exam': 'Disk failure'})['id']
+    store.update_session(sid, 'active')
+    engine = Engine(store, Path('models'), tmp_path, bytes(32))
+    engine.start_camera(sid, 0, Policy(camera_required=False, microphone_required=False, screen_recording=False))
+    engine.record('phone_detected', {'confidence': 0.9})
+    def disk_full(capture):
+        raise OSError('Injected final evidence disk full')
+    monkeypatch.setattr(engine, '_save_evidence', disk_full)
+    try:
+        engine.stop_camera()
+        assert engine.sid is None and not engine.pending
+        assert 'Injected final evidence disk full' in engine.evidence_error
+        assert store.session(sid)['data']['evidence_incomplete'] is True
+        assert store.db.execute("SELECT count(*) FROM audit WHERE action='evidence_write_failed'").fetchone()[0] == 1
+    finally:
+        engine.writer.shutdown()

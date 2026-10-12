@@ -5,12 +5,12 @@ const python =
   process.env.SERGEK_PYTHON ||
   (existsSync(".venv/Scripts/python.exe")
     ? resolve(".venv/Scripts/python.exe")
-    : resolve("../../work/sergek-venv/Scripts/python.exe"));
+    : "python");
 export default defineConfig({
   testDir: "./tests/browser",
   use: {
     baseURL: "http://127.0.0.1:8765",
-    channel: "msedge",
+    channel: process.env.SERGEK_BROWSER_CHANNEL || "msedge",
     viewport: { width: 1440, height: 1000 },
   },
   workers: 1,

@@ -5,6 +5,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 os.environ["SERGEK_DATA"] = tempfile.mkdtemp(prefix="sergek-browser-")
 os.environ["SERGEK_DESKTOP_KEY"] = "browser-fixture-only"
 os.environ.pop("SERGEK_DEMO_CONFIG", None)
+os.environ['SERGEK_SERVICE_ROLE']='hub'
 from backend import app as module
 from backend.security import hash_password
 module.store.set_setting("password", hash_password(os.environ.get("SERGEK_TEST_PASSWORD", "AcceptanceTeacher123!")))

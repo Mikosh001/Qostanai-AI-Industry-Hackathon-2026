@@ -3,6 +3,7 @@ import pytest
 from pypdf import PdfReader
 from backend.store import Store
 from backend.reports import pdf_report
+from backend.report_i18n import EVIDENCE_WARNING
 
 
 @pytest.mark.parametrize("lang,title,phone,state", [
@@ -15,10 +16,13 @@ def test_pdf_language_preserves_data_and_review_separation(tmp_path, lang, title
     session = store.create_session({"student": "Мейірбек Example", "exam": "Exam Қазақша", "platform": "moodle"})
     store.add_event(session["id"], "phone_detected", {"confidence": .9, "duration_seconds": 3})
     store.add_event(session["id"], "navigation_blocked", {"host": "example.org"})
+    store.update_session(session["id"], patch={"evidence_incomplete": True})
     text = "\n".join(page.extract_text() for page in PdfReader(BytesIO(pdf_report(store, session["id"], lang))).pages)
     for value in [title, phone, state, "Мейірбек Example", "Exam Қазақша"]:
         assert value in text
     assert "example.org" not in text
+    warning = next(iter(EVIDENCE_WARNING))
+    assert (warning if lang == "kk" else EVIDENCE_WARNING[warning][lang]) in text
     assert store.events(session["id"])[0]["kind"] == "phone_detected"
 
 

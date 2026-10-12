@@ -1,0 +1,126 @@
+{
+  "date": "2026-10-12",
+  "scope": "HTTPS protocol-2 synthetic load. No physical camera, OS guard or PHP load.\n\nUses independent driver processes and persistent connections. The test owns its\ntemporary hub, keys and database, and never touches a university or demo session.\n",
+  "students": 500,
+  "duration_per_client_seconds": 600,
+  "elapsed_seconds": 618.33,
+  "drivers": 4,
+  "initial_events_per_session": 100,
+  "lease_period_seconds": 2,
+  "ramp_seconds": 8,
+  "errors": [
+    {
+      "phase": "lease",
+      "status": 422,
+      "detail": "{\"detail\":\"Invalid lease\"}"
+    },
+    {
+      "phase": "lease",
+      "status": 422,
+      "detail": "{\"detail\":\"Invalid lease\"}"
+    },
+    {
+      "phase": "status",
+      "error": "RemoteProtocolError"
+    },
+    {
+      "phase": "status",
+      "error": "RemoteProtocolError"
+    },
+    {
+      "phase": "lease",
+      "status": 422,
+      "detail": "{\"detail\":\"Invalid lease\"}"
+    },
+    {
+      "phase": "status",
+      "error": "RemoteProtocolError"
+    },
+    {
+      "phase": "lease",
+      "error": "RemoteProtocolError"
+    },
+    {
+      "phase": "lease",
+      "error": "RemoteProtocolError"
+    },
+    {
+      "phase": "lease",
+      "error": "RemoteProtocolError"
+    },
+    {
+      "phase": "status",
+      "error": "RemoteProtocolError"
+    },
+    {
+      "phase": "lease",
+      "status": 422,
+      "detail": "{\"detail\":\"Invalid lease\"}"
+    },
+    {
+      "phase": "lease",
+      "error": "RemoteProtocolError"
+    },
+    {
+      "phase": "lease",
+      "status": 422,
+      "detail": "{\"detail\":\"Invalid lease\"}"
+    },
+    {
+      "phase": "lease",
+      "status": 422,
+      "detail": "{\"detail\":\"Invalid lease\"}"
+    }
+  ],
+  "synthetic_evidence_bytes_per_30_seconds": 0,
+  "backend_sha256": "e2bc8ba4c2ecf6d64b1f89b5420dc042e03e362d2b10d147d1250a92755fc3ba",
+  "driver_sha256": "1b7869bec3318ddddb46cd0cb88673df018f29a3085738956e4c6e9a6ce22f55",
+  "stale": 278,
+  "completed": 500,
+  "hub_rss_mb": {
+    "first": 85.2,
+    "peak": 344.2,
+    "last": 141.6
+  },
+  "requests": {
+    "ingest": 5299,
+    "lease": 67900,
+    "status": 67900
+  },
+  "latency_ms": {
+    "ingest": {
+      "p50": 1466.07,
+      "p95": 5983.35,
+      "p99": 10012.47
+    },
+    "lease": {
+      "p50": 1416.06,
+      "p95": 6307.33,
+      "p99": 11501.22
+    },
+    "status": {
+      "p50": 1431.71,
+      "p95": 6429.69,
+      "p99": 11518.71
+    }
+  },
+  "server_processing_ms": {
+    "p50": 7.53,
+    "p95": 1579.38,
+    "p99": 2210.4
+  },
+  "machine": {
+    "logical_cpus": 20,
+    "ram_gb": 15.7
+  },
+  "persisted_completed": 500,
+  "integrity_failures": 0,
+  "passed": false,
+  "source_hash_correction": {
+    "reason": "Generator originally hashed source at end; agent sync and generator were edited while hub process retained its imported code. Original end hashes above are preserved; separate source snapshot captured before the agent sync edit follows. This run is not a final-frozen backend claim.",
+    "recorded_snapshot": {
+      "backend_sha256": "f5c684ef0bfa9d9addb2cae099336ed1dc10bda2d343357f6d7d3c28f9597188",
+      "driver_sha256": "d8da2a13fbe0200fc95cefea4c8ce020c93829ddc5f1688954622a1f32ed0bac"
+    }
+  }
+}

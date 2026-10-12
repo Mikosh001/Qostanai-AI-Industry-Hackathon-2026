@@ -90,7 +90,7 @@ const fs = require("node:fs");
       );
     if (process.env.SERGEK_HANDOFF_ONLY !== "1")
       await local.evaluate(
-        async ({ creds, meta }) => {
+        async ({ creds, meta, software }) => {
           const send = async (route, method, body) => {
             const r = await fetch("/api" + route, {
               method,
@@ -105,20 +105,22 @@ const fs = require("node:fs");
           p.policy.camera_required = false;
           p.policy.screen_recording = false;
           p.policy.microphone_required = false;
+          if (software) p.exam_mode='monitor';
           p.allowed_hosts = ["localhost"];
           p.moodle_url = "https://localhost/";
           p.platonus_url = "https://localhost/";
           p.tls_pins = { localhost: meta.fingerprint };
           await send("/profile", "PUT", p);
-          await send("/integration/moodle", "PUT", { key: creds.sharedkey });
+          await send("/integration/moodle", "PUT", { public_key: creds.moodle_public_key });
           await send("/integration/hub", "PUT", {
             enabled: true,
             url: meta.hub,
-            pairing_key: creds.hubkey,
+            device_id: creds.device_id,
+            device_key: creds.device_key,
           });
           await send("/auth/logout", "POST");
         },
-        { creds, meta },
+        { creds, meta, software: process.env.SERGEK_SOFTWARE_ACCEPTANCE === '1' },
       );
     await local.reload();
     await expect(local.getByLabel("Емтихан режимі")).toHaveCount(0);
@@ -222,14 +224,14 @@ const fs = require("node:fs");
     // Regression: the very first protected page must be usable. No manual reload.
     await expect(attemptButton).toBeVisible({ timeout: 30000 });
     await expect(protectedPage.getByRole("link", { name: "Open Sergek Proctor", exact: true })).toHaveCount(0);
-    const pageProtection = await protectedPage.evaluate(() => ({
+    // Playwright can see a hidden WebContentsView's DOM before Electron has
+    // awaited protection and exposed that view to the student.
+    await expect.poll(()=>protectedPage.evaluate(() => ({
       printBlocked: window.print.__sergekBlocked === true,
       pasteBlocked: !document.dispatchEvent(
         new Event("paste", { bubbles: true, cancelable: true }),
       ),
-    }));
-    if (!pageProtection.printBlocked || !pageProtection.pasteBlocked)
-      throw new Error("Print/clipboard protection did not initialize");
+    })),{timeout:15000}).toEqual({printBlocked:true,pasteBlocked:true});
     await protectedPage.evaluate(() => {
       const image = new Image();
       image.src = "https://cdn.jsdelivr.net/sergek-blocked-regression.png";
@@ -257,6 +259,7 @@ const fs = require("node:fs");
     const active = await local.evaluate(async () => (await window.sergek.invoke("snapshot")).session);
     if(!active.started) throw new Error("Actual start not persisted");
     await expect(protectedPage.locator(".que").first()).toBeVisible();
+    await expect.poll(()=>local.evaluate(async()=>(await window.sergek.invoke('info')).examReady)).toBe(true);
     const startupMilliseconds = Date.now() - attemptStartWait;
     if(startupMilliseconds > 15000) throw new Error("Exam startup exceeded 15 seconds: " + startupMilliseconds);
     if (process.env.SERGEK_QUIZ_URL) {

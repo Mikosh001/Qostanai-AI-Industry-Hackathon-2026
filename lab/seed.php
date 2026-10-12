@@ -42,6 +42,7 @@ if (!$DB->record_exists('quiz_slots',['quizid'=>$quiz->id])) {
 $DB->set_field('quizaccess_sergek','enabled',1,['quizid'=>$quiz->id]);
 set_config('huburl','https://localhost:9443','quizaccess_sergek');
 set_config('sharedkey',$credentials['sharedkey'],'quizaccess_sergek');
+set_config('signingseed',$credentials['signingseed'],'quizaccess_sergek');
 // Software integration acceptance deliberately does not switch OS restrictions on this PC.
 set_config('minimum_mode',getenv('SERGEK_LAB_MODE') === 'strict' ? 'strict' : 'monitor','quizaccess_sergek');
 set_config('auth','manual');set_config('enablecompletion',0);

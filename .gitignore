@@ -19,6 +19,9 @@ localhost.key
 runtime/
 __pycache__/
 .pytest_cache/
+.hypothesis/
+.coverage
+coverage.json
 test-results/
 playwright-report/
 *.log

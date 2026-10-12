@@ -5,13 +5,33 @@ os.environ["SERGEK_DESKTOP_KEY"] = "test-desktop-key"
 import pytest
 import httpx
 from fastapi.testclient import TestClient
-from backend import app as module
+from unittest.mock import patch
+# API fixtures replace the camera engine. Real model inference has separate tests;
+# do not start an unused model-loading daemon when importing the API suite.
+with patch("backend.engine.Engine._load", lambda self: setattr(self, "loading", False)):
+    from backend import app as module
 from backend.store import Store
-from backend.security import sign_launch, canonical
+from backend.security import canonical
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+import base64
+
+
+def sign_launch(payload, unused_legacy_key):
+    """Test issuer owns a private key; the application receives only the public key."""
+    private = Ed25519PrivateKey.from_private_bytes(bytes(range(32)))
+    module.store.set_setting('moodle_public_key',private.public_key().public_bytes_raw().hex())
+    value={'iat':time.time(),'aud':'sergek-exam-v2','mode':'monitor','device_id':'a'*32,**payload}
+    hub=module.store.secret('hub',{})
+    hub.update(device_id=value['device_id'],device_key='fixture-device-key-'+'x'*40)
+    module.store.set_secret('hub',hub)
+    raw=base64.urlsafe_b64encode(canonical(value)).decode().rstrip('=')
+    signature=base64.urlsafe_b64encode(private.sign(raw.encode())).decode().rstrip('=')
+    return 'SG2.'+raw+'.'+signature
 
 
 class TestCamera:
     """API tests inject a camera; actual models are tested separately in test_core."""
+    __test__ = False
 
     def __init__(self):
         self.sid = None
@@ -329,7 +349,7 @@ def test_hub_auth_and_chain_validation(client):
             "created": "2026-10-06T00:00:00+00:00",
             "ended": None,
             "status": "active",
-            "data": {"student": "Remote", "exam": "Exam", "platform": "moodle"},
+            "data": {"student": "Remote", "exam": "Exam", "platform": "local"},
         },
         "events": [],
         "evidence": {},
@@ -464,14 +484,12 @@ def test_moodle_start_waits_for_matching_active_hub_session(client, monkeypatch)
     assert client.post(route,headers=headers(value),json={}).status_code==409
     camera['identity_enrolled']=True
     sent = []
-    monkeypatch.setattr(module, 'sync_hub', lambda ids, **kw: sent.append(ids))
     state = {'active': False, 'prepared': False, 'session_id': sid, 'mode': 'monitor'}
-    def answer(url, **kw):
-        assert url == 'https://localhost:9443/api/moodle/status'
-        assert kw['params']['nonce'] == 'ready-once'
-        assert kw['headers']['x-sergek-moodle'] == key
-        return httpx.Response(200, json=state, request=httpx.Request('GET', url))
-    monkeypatch.setattr(module, 'local_request', lambda method,url,**kw:answer(url,**kw))
+    def sync(ids, **kw):
+        sent.append(ids)
+        module.store.set_setting('hub_lease:'+sid,state)
+    monkeypatch.setattr(module, 'sync_hub', sync)
+    monkeypatch.setattr(module, 'local_request', lambda *a,**kw:pytest.fail('Agent must not access Moodle server credentials/status API'))
     assert client.post(route, headers=headers(value), json={}).json()['ready'] is False
     state['prepared'] = True
     assert client.post(route, headers=headers(value), json={}).json()['ready'] is True
@@ -486,10 +504,10 @@ def test_moodle_start_waits_for_matching_active_hub_session(client, monkeypatch)
     assert client.post(route, headers=headers(value), json={}).json()['ready'] is True
     assert sent == [[sid]] * 6
     assert client.post(route, json={}).status_code == 401
-    monkeypatch.setattr(module, 'local_request', lambda *a, **k: (_ for _ in ()).throw(httpx.ConnectError('offline')))
+    monkeypatch.setattr(module, 'sync_hub', lambda *a,**k:False)
     result = client.post(route, headers=headers(value), json={})
     assert result.status_code == 200 and not result.json()['ready']
-    assert 'хабына байланыс жоқ' in result.json()['message']
+    assert 'қалпына келуде' in result.json()['message']
 
 
 def test_photo_starts_without_gestures_even_with_legacy_session_policy(client, monkeypatch):

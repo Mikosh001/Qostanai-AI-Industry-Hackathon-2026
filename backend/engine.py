@@ -1,4 +1,4 @@
-import threading, time, cv2, base64, json, zipfile, io, hashlib, logging
+import threading, time, cv2, base64, json, zipfile, io, hashlib, logging, os
 from collections import deque
 from .vision import Vision, TemporalRules
 from .security import encrypt, decrypt
@@ -50,6 +50,8 @@ class Engine:
 
     def _load(self):
         try:
+            if os.environ.get("SERGEK_SERVICE_ROLE") == "hub":
+                return  # Central receiver never performs webcam inference.
             cv2.setNumThreads(2)
             self.vision = Vision(self.models)
             self.load_error = self.vision.error
@@ -363,6 +365,10 @@ class Engine:
             event = self.store.add_event(self.sid, kind, detail)
             if review_category(kind, detail) == "technical":
                 return event
+            self.writes=[f for f in self.writes if not f.done()]
+            if len(self.pending)>=8 or len(self.writes)>=4:
+                self._evidence_failed(RuntimeError('Evidence queue capacity exceeded'),event['id'])
+                return event
             tracks = {"camera": list(self.frames), "screen": list(self.screen_frames),
                       "audio": list(self.audio_frames)}
             if screen_jpeg and self.policy.screen_recording:
@@ -408,11 +414,22 @@ class Engine:
         try:
             future.result()
         except Exception as exc:
-            self.evidence_error = "Дәлелді сақтау қатесі: " + str(exc)
-            logging.exception("Evidence write failed")
+            self._evidence_failed(exc, event_id)
+
+    def _evidence_failed(self, exc, event_id):
+        self.evidence_error = "Дәлелді сақтау қатесі: " + str(exc)
+        logging.exception("Evidence write failed")
+        try:
+            event = self.store.event(event_id)
+            if event:
+                self.store.update_session(event["session_id"], patch={"evidence_incomplete": True})
             self.store.audit(
                 "evidence_write_failed", {"event_id": event_id, "error": str(exc)}
             )
+        except Exception:
+            # A full disk can also prevent an audit commit. Keep the visible error
+            # and release capture resources even when durable reporting is unavailable.
+            logging.exception("Could not persist evidence failure")
 
     def _save_evidence(self, capture):
         tracks = capture.get("tracks", {"camera": capture.get("frames", [])})
@@ -453,11 +470,14 @@ class Engine:
                     }
                 ),
             )
-        encrypted = encrypt(stream.getvalue(), self.key)
+        raw=stream.getvalue()
+        from .storage_budget import require_space
+        require_space(self.data,len(raw))
+        encrypted = encrypt(raw, self.key)
         path = self.data / "evidence" / f"{capture['id']}.sg"
         path.parent.mkdir(exist_ok=True)
         path.write_bytes(encrypted)
-        self.store.attach_media(capture["id"], path.name)
+        self.store.attach_media(capture["id"], path.name, hashlib.sha256(raw).hexdigest(),len(raw))
         self.store.audit(
             "evidence_saved",
             {
@@ -472,17 +492,28 @@ class Engine:
             captures = self.pending
             self.pending = []
         for capture in captures:
-            self._save_evidence(capture)
+            try:
+                self._save_evidence(capture)
+            except Exception as exc:
+                self._evidence_failed(exc, capture["id"])
 
     def evidence(self, event):
-        path = self.data / "evidence" / event["media"]
+        folder=(self.data/'evidence').resolve()
+        path=(folder/event['media']).resolve()
+        if not path.is_relative_to(folder):
+            raise ValueError('Invalid evidence path')
         raw = decrypt(path.read_bytes(), self.key)
+        from .evidence_validation import validate_clip
+        validate_clip(raw,event['id'])
+        commitments=[e for e in self.store.events(event['session_id']) if e['kind']=='evidence_committed' and e['detail'].get('event_id')==event['id']]
+        if commitments and commitments[0]['detail']['sha256']!=hashlib.sha256(raw).hexdigest():
+            raise ValueError('Evidence content does not match the event chain')
         with zipfile.ZipFile(io.BytesIO(raw)) as archive:
             manifest = json.loads(archive.read("manifest.json"))
             if manifest.get("audio"):
                 manifest["audio"]["src"] = "data:audio/wav;base64," + base64.b64encode(
                     archive.read(manifest["audio"]["file"])).decode()
-            tracks = manifest.get("tracks", {"camera": manifest["frames"]})
+            tracks = manifest.get("tracks") or {"camera": manifest.get("frames",[])}
             for frames in tracks.values():
                 for frame in frames:
                     frame["image"] = (

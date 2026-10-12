@@ -1,0 +1,56 @@
+{
+  "date": "2026-10-12",
+  "scope": "HTTPS protocol-2 synthetic load. No physical camera, OS guard or PHP load.\n\nUses independent driver processes and persistent connections. The test owns its\ntemporary hub, keys and database, and never touches a university or demo session.\n",
+  "students": 100,
+  "duration_per_client_seconds": 120,
+  "elapsed_seconds": 131.1,
+  "drivers": 4,
+  "initial_events_per_session": 100,
+  "lease_period_seconds": 2,
+  "ramp_seconds": 8,
+  "errors": [],
+  "synthetic_evidence_bytes_per_30_seconds": 1000000,
+  "backend_sha256": "e2bc8ba4c2ecf6d64b1f89b5420dc042e03e362d2b10d147d1250a92755fc3ba",
+  "driver_sha256": "1b7869bec3318ddddb46cd0cb88673df018f29a3085738956e4c6e9a6ce22f55",
+  "stale": 0,
+  "completed": 100,
+  "hub_rss_mb": {
+    "first": 85.5,
+    "peak": 140.9,
+    "last": 117.1
+  },
+  "requests": {
+    "ingest": 600,
+    "lease": 6000,
+    "status": 6000
+  },
+  "latency_ms": {
+    "ingest": {
+      "p50": 30.62,
+      "p95": 76.16,
+      "p99": 104.85
+    },
+    "lease": {
+      "p50": 9.31,
+      "p95": 28.28,
+      "p99": 45.04
+    },
+    "status": {
+      "p50": 4.55,
+      "p95": 19.75,
+      "p99": 33.97
+    }
+  },
+  "server_processing_ms": {
+    "p50": 2.68,
+    "p95": 18.04,
+    "p99": 32.11
+  },
+  "machine": {
+    "logical_cpus": 20,
+    "ram_gb": 15.7
+  },
+  "persisted_completed": 100,
+  "integrity_failures": 0,
+  "passed": true
+}

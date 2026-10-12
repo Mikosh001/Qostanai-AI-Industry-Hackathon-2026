@@ -20,18 +20,22 @@ def bootstrap_demo(store, config_file):
     if len(pin) != 64 or any(c not in "0123456789abcdef" for c in pin):
         raise ValueError("Local certificate fingerprint required")
     hub = HubConfig.model_validate(config["hub"])
-    if hub.url != "https://localhost:9443" or not hub.enabled or len(hub.pairing_key) < 32:
+    if hub.url != "https://localhost:9443" or not hub.enabled or len(hub.device_key) < 32 or len(hub.device_id)!=32:
         raise ValueError("Local authenticated hub required")
     if p.exam_mode != "strict" or not all(getattr(p.policy, x) for x in (
         "camera_required", "microphone_required", "screen_recording", "close_applications",
         "remote_block", "usb_block", "keyboard_block", "single_monitor"
     )):
         raise ValueError("Demo bootstrap must retain full protection")
-    if len(config["moodle_key"]) < 32 or len(config["teacher_password"]) < 12:
+    if len(config["moodle_public_key"]) != 64 or len(config["teacher_password"]) < 12:
         raise ValueError("Invalid demo credentials")
     if not store.setting("password"):
         store.set_setting("password", hash_password(config["teacher_password"]))
     store.set_setting("profile", p.model_dump())
-    store.set_setting("moodle_key", config["moodle_key"])
-    store.set_setting("hub", hub.model_dump())
+    store.set_setting("moodle_public_key", config["moodle_public_key"])
+    # Remove obsolete client copies of server-only credentials during migration.
+    with store.lock:
+        store.db.execute("DELETE FROM settings WHERE key IN ('moodle_key','secret:moodle_key')")
+        store.db.commit()
+    store.set_secret("hub", hub.model_dump())
     store.audit("local_demo_bootstrap", {"moodle_url": p.moodle_url, "protection": "strict"})

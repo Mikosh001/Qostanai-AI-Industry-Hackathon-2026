@@ -3,7 +3,7 @@ from pathlib import Path
 from xml.sax.saxutils import escape
 import os, json, hashlib
 from .event_policy import annotate
-from .report_i18n import MESSAGES
+from .report_i18n import MESSAGES, EVIDENCE_WARNING
 
 LABELS = {
     "sound_activity": "Ұзақ дауыс белсенділігі — тексеру қажет",
@@ -40,12 +40,22 @@ LABELS = {
 
 
 def payload(store, sid):
+    with store.lock:
+        return _payload(store,sid)
+
+
+def _payload(store, sid):
     session = store.session(sid)
+    session['data'].pop('launch_proof',None)
+    session['data'].pop('launch_token',None)
     return {
         "schema": "sergek-report/1",
         "session": session,
         "events": [annotate(event) for event in store.events(sid)],
         "integrity_ok": store.integrity(sid),
+        "event_anchor": store.anchor(sid),
+        "hub_anchor": store.setting('hub_anchor:'+sid),
+        "completeness_scope": "Local anchor plus hub acknowledgement when available; not protection against a local administrator rewriting every local trust source.",
         "answers": store.answers(sid),
         "meaning": "Observations for human review; not an automatic cheating verdict.",
     }
@@ -56,7 +66,7 @@ def pdf_report(store, sid, lang="kk"):
         raise ValueError("Unsupported report language")
 
     def text(value):
-        return value if lang == "kk" else MESSAGES.get(value, {}).get(lang, value)
+        return value if lang == "kk" else (EVIDENCE_WARNING.get(value) or MESSAGES.get(value, {})).get(lang, value)
 
     states = {"preflight": "Дайындық", "active": "Белсенді", "completed": "Аяқталды", "interrupted": "Үзілді", "pending": "Тексерілмеген", "confirmed": "Расталды", "dismissed": "Негізсіз"}
     from reportlab.platypus import (
@@ -115,6 +125,8 @@ def pdf_report(store, sid, lang="kk"):
     ]
     for key, value in fields:
         flow.append(p(f"{text(key)}: {value}"))
+    if session["data"].get("evidence_incomplete"):
+        flow.append(p("Дәлелдердің бір бөлігі сақталмады. Техникалық журналды тексеріңіз."))
     flow += [
         Spacer(1, 16),
         p(

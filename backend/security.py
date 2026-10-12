@@ -1,4 +1,4 @@
-import hashlib, hmac, secrets, json, base64, os, time
+import hashlib, hmac, secrets, json, base64, os, time, math, tempfile
 from pathlib import Path
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
@@ -44,10 +44,18 @@ def load_key(path: Path) -> bytes:
         )
     else:
         blob = key
-    path.write_bytes(blob)
-    if os.name != "nt":
-        os.chmod(path, 0o600)
-    return key
+    # Atomically publish a complete file. Concurrent first requests must never
+    # create different keys or read a half-written credential wrapping key.
+    with tempfile.NamedTemporaryFile(dir=path.parent,prefix='.key-',delete=False) as stream:
+        temporary=Path(stream.name)
+        stream.write(blob);stream.flush();os.fsync(stream.fileno())
+    try:
+        if os.name!='nt':os.chmod(temporary,0o600)
+        try:os.link(temporary,path)
+        except FileExistsError:return load_key(path)
+        return key
+    finally:
+        temporary.unlink(missing_ok=True)
 
 
 def encrypt(blob: bytes, key: bytes) -> bytes:
@@ -72,9 +80,15 @@ def verify_launch(token: str, key: str) -> dict:
     if not hmac.compare_digest(signature, expected):
         raise ValueError("Invalid launch signature")
     value = json.loads(base64.urlsafe_b64decode(raw + "=" * (-len(raw) % 4)))
-    if not isinstance(value.get("exp"), (float, int)) or value["exp"] < time.time():
+    if not isinstance(value, dict):
+        raise ValueError("Invalid launch payload")
+    expiry = value.get("exp")
+    if isinstance(expiry, bool) or not isinstance(expiry, (float, int)) or not 0 < expiry < 1e12 or not math.isfinite(expiry) or expiry < time.time():
         raise ValueError("Expired launch")
     for field in ("nonce", "userid", "quizid", "url"):
-        if not value.get(field):
+        claim = value.get(field)
+        if isinstance(claim, bool) or not isinstance(claim, (str, int)) or not claim:
             raise ValueError("Incomplete launch")
+    if not isinstance(value["nonce"], str) or not isinstance(value["url"], str):
+        raise ValueError("Invalid launch claims")
     return value

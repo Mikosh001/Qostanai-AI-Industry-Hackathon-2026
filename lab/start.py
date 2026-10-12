@@ -65,6 +65,16 @@ def start():
     credentials = json.loads(private_file.read_text(encoding="utf-8"))
     credentials.setdefault("moodle_teacher", "sergek.teacher")
     credentials.setdefault("moodle_teacher_password", "Demo!" + secrets.token_urlsafe(18) + "9aA")
+    credentials.setdefault('signingseed',secrets.token_hex(32))
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+    credentials['moodle_public_key']=Ed25519PrivateKey.from_private_bytes(bytes.fromhex(credentials['signingseed'])).public_key().public_bytes_raw().hex()
+    from backend.store import Store
+    from backend.trust import enroll,initialize,device_live
+    provisioning=Store(LAB/'hub'/'sergek.db')
+    initialize(provisioning)
+    if not credentials.get('device_id') or not device_live(provisioning,credentials['device_id']):
+        credentials.update(enroll(provisioning,'Local judge demonstration'))
+    provisioning.db.close()
     private_file.write_text(json.dumps(credentials, indent=2), encoding="utf-8")
     # Base Python avoids the venv redirector's private Job. Its dependencies
     # travel explicitly to children; no machine-wide PATH or Python changes.
@@ -115,6 +125,7 @@ def start():
             "SERGEK_CA_FILE": str(LAB / "localhost.crt"),
             "SERGEK_LAB_REVISION": current_revision,
             "SERGEK_LAB_LIFETIME": "base-runtime-v2",
+            "SERGEK_SERVICE_ROLE": "hub" if name == "hub" else "lab",
         }
         process = subprocess.Popen(
             args, env=childenv, cwd=ROOT, stdout=log, stderr=log, creationflags=FLAGS
@@ -144,7 +155,7 @@ def start():
             meta["hub"] + "/api/auth/login", json={"password": creds["teacherpass"]}
         ).raise_for_status()
         client.put(
-            meta["hub"] + "/api/integration/moodle", json={"key": creds["sharedkey"]}
+            meta["hub"] + "/api/integration/moodle", json={"key": creds["sharedkey"],"public_key":creds['moodle_public_key']}
         ).raise_for_status()
         # This is test fixture preparation in a new isolated DB, never a university profile.
         from backend.store import Store
