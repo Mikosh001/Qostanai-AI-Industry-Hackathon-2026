@@ -64,6 +64,41 @@ test("An administrative software fixture never activates OS restrictions", async
   await startProtectedExam(f.options);
   assert.deepEqual(f.calls, ["probe", "start", "open"]);
 });
+test("Missing live touchpad protection rejects activation before a Moodle attempt starts", async () => {
+  const f = fixture({ requireGestures: true });
+  await assert.rejects(() => startProtectedExam(f.options), /Тачпад/);
+  assert.deepEqual(f.calls, ["protect", "activate", "release"]);
+});
+test("Gesture protection must still be active in the final readiness probe", async () => {
+  const f = fixture({
+    requireGestures: true,
+    activate: async () => ({
+      available: true,
+      active: true,
+      gestures_enforced: true,
+    }),
+  });
+  await assert.rejects(() => startProtectedExam(f.options), /Тачпад/);
+  assert.ok(!f.calls.includes("start"));
+  assert.equal(f.calls.at(-1), "release");
+});
+test("Verified touchpad protection allows the existing start transaction", async () => {
+  const f = fixture({
+    requireGestures: true,
+    activate: async () => ({
+      available: true,
+      active: true,
+      gestures_enforced: true,
+    }),
+    probe: async () => ({
+      available: true,
+      active: true,
+      gestures_enforced: true,
+    }),
+  });
+  await startProtectedExam(f.options);
+  assert.ok(f.calls.includes("start") && f.calls.includes("open"));
+});
 test("Guard failure during readiness retains its cause and never starts the exam", async () => {
   let probes = 0;
   const f = fixture({

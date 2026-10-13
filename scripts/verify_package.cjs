@@ -12,5 +12,5 @@ assert.equal(JSON.parse(asar.extractFile(path.join(resources,'app.asar'),'packag
 for(const [from,to] of [['build/guard/Sergek.Guard.exe','guard/Sergek.Guard.exe'],['build/guard/Sergek.Guard.dll','guard/Sergek.Guard.dll'],['build/backend/sergek-backend.exe','backend/sergek-backend.exe'],['dist/index.html','ui/index.html'],...fs.readdirSync(path.join(root,'dist/assets')).map(n=>['dist/assets/'+n,'ui/assets/'+n])]) {
  assert.equal(digest(fs.readFileSync(path.join(root,from))),digest(fs.readFileSync(path.join(resources,to))),to);checks.push(to);
 }
-const result={passed:true,version,scope:process.argv[2]?'installed application':'packaged application',checks};
+const result={passed:true,version,scope:resources.startsWith(path.join(root,`release-v${version}`))?'packaged application':'installed application',checks};
 fs.writeFileSync(process.argv[3]||path.join(root,'tests/session-repair-package.json'),JSON.stringify(result,null,2));console.log(JSON.stringify(result));

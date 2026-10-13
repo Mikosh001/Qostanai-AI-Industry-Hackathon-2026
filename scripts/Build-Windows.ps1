@@ -14,6 +14,8 @@ if ($LASTEXITCODE) { throw 'Guard rule test failed' }
 if ($LASTEXITCODE) { throw 'Window classification regression failed' }
 & '.\build\guard\Sergek.Guard.exe' --self-test-window-close
 if ($LASTEXITCODE) { throw 'Isolated application closure regression failed' }
+& '.\build\guard\Sergek.Guard.exe' --self-test-gestures
+if ($LASTEXITCODE) { throw 'Touchpad settings recovery regression failed' }
 & $Python -m PyInstaller --noconfirm --name sergek-backend --distpath build\backend-dist --workpath build\pyinstaller --specpath build --paths . --collect-all mediapipe --collect-all onnxruntime --collect-all cv2 --collect-all sounddevice --collect-all _sounddevice_data --hidden-import win32crypt backend\run.py
 if ($LASTEXITCODE) { throw 'Backend build failed' }
 # Only copy generated contents into this project's verified build directory.

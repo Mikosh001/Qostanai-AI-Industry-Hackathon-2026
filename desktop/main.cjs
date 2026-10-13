@@ -268,6 +268,7 @@ function startGuard() {
           "remote_enforcement_failed",
           "storage_enforcement_failed",
           "protected_desktop_left",
+          "gesture_enforcement_failed",
         ].includes(message.kind);
         if (fatal) {
           guardFailure =
@@ -281,6 +282,8 @@ function startGuard() {
               remote_enforcement_failed:
                 "Қашықтан басқару қорғанысы расталмады",
               protected_desktop_left: "Windows жұмыс ортасы ауысты",
+              gesture_enforcement_failed:
+                "Тачпад қимылдарының қорғанысы расталмады",
               emergency_release: "Апаттық шығу орындалды",
             }[message.kind] || message.kind;
           log(
@@ -847,6 +850,7 @@ async function startCurrentExam() {
     const startAt = Date.now();
     const result = await startProtectedExam({
       strict: current.session.data.mode === "strict",
+      requireGestures: profile.policy.keyboard_block,
       protect: async () => window.setContentProtection(true),
       activate: activateProtection,
       probe: async () => {

@@ -89,6 +89,7 @@ internal static partial class Program {
         try {
           lock(RestrictionSync) {
             if(!Active)return;
+            VerifyGestures();if(!Active)return;
             if(CloseApplications&&!InputDesktopAvailable()) {
                 Emit(new{type="event",kind="protected_desktop_left",detail=new{reason="input_desktop_changed",blocked=false}});Release();return;
             }

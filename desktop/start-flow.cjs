@@ -1,6 +1,7 @@
 // The same transaction is used by the desktop and exercised without OS mutations in tests.
 async function startProtectedExam({
   strict,
+  requireGestures = false,
   protect,
   activate,
   probe,
@@ -16,6 +17,8 @@ async function startProtectedExam({
       const initial = await activate();
       if (!initial.available || !initial.active || initial.error)
         throw new Error(initial.error || "Windows қорғанысы іске қосылмады");
+      if (requireGestures && !initial.gestures_enforced)
+        throw new Error("Тачпад қимылдарының қорғанысы іске қосылмады");
     }
     let native = await probe();
     const deadline = Date.now() + 15000;
@@ -33,6 +36,8 @@ async function startProtectedExam({
     }
     if (strict && (!native.available || !native.active || native.error))
       throw new Error(native.error || "Қорғаныс байланысы жоғалды");
+    if (strict && requireGestures && !native.gestures_enforced)
+      throw new Error("Тачпад қимылдарының қорғанысы расталмады");
     const result = await start(native);
     started = true;
     await open();

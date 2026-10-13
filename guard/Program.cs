@@ -35,6 +35,9 @@ internal static partial class Program {
     static void Emit(object value) { lock(Sync) { Console.WriteLine(JsonSerializer.Serialize(value)); Console.Out.Flush(); } }
     static bool Admin() => new WindowsPrincipal(WindowsIdentity.GetCurrent()).IsInRole(WindowsBuiltInRole.Administrator);
     static async Task Main(string[] args) {
+        if(args.Contains("--probe-gestures")){Environment.ExitCode=ProbeGestures()?0:1;return;}
+        if(args.Contains("--self-test-gestures")){Environment.ExitCode=GestureRegression()?0:1;return;}
+        if(args.Contains("--self-test-gestures-live")){Environment.ExitCode=LiveGestureRegression()?0:1;return;}
         if(args.Contains("--self-test-windows")){Environment.ExitCode=WindowRegression()?0:1;return;}
         if(args.Contains("--test-target-window")){RunWindowTarget();return;}
         if(args.Contains("--self-test-window-close")){Environment.ExitCode=WindowClosureRegression()?0:1;return;}
@@ -61,7 +64,7 @@ internal static partial class Program {
             Environment.ExitCode=passed?0:1;return;
         }
         if(args.Contains("--self-test")) {
-            var checks=new[]{KeyBlocked(0x09,false,true),KeyBlocked(0x43,true,false),KeyBlocked(0x5B,false,false),!KeyBlocked(0x41,false,false),!KeyBlocked(0x43,false,false)};
+            var checks=new[]{KeyBlocked(0x09,false,true),KeyBlocked(0x43,true,false),KeyBlocked(0x5B,false,false),!KeyBlocked(0x41,false,false),!KeyBlocked(0x43,false,false),KeyBlocked(0x25,true,false,false,true),KeyBlocked(0x27,true,false,false,true),!KeyBlocked(0x25,true,false)};
             UpdateParents();var parentSnapshot=Parents.ContainsKey(Environment.ProcessId);var desktop=InputDesktopAvailable();
             var topology=LauncherRegression();
             Emit(new{type="self_test",passed=checks.All(x=>x)&&parentSnapshot&&topology,checks=checks.Length,parent_snapshot=parentSnapshot,launcher_topology=topology,input_desktop_default=desktop});Environment.ExitCode=checks.All(x=>x)&&parentSnapshot&&topology?0:1;return;
@@ -70,6 +73,14 @@ internal static partial class Program {
         var data = Environment.GetEnvironmentVariable("SERGEK_GUARD_DATA") ?? Path.Combine(AppContext.BaseDirectory,"runtime");
         Directory.CreateDirectory(data);JournalPath=Path.Combine(data,"guard-recovery.json");
         RemoteJournalPath=Path.Combine(data,"remote-recovery.json");
+        // Gestures affect the whole Windows user, across application profiles.
+        // Share recovery and an exclusive lease to avoid two helpers restoring
+        // each other's active restrictions or backing up an already blocked state.
+        var gestureData=Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),"Sergek Proctor");
+        Directory.CreateDirectory(gestureData);
+        GestureJournalPath=Path.Combine(gestureData,"gesture-recovery.json");
+        GestureLeasePath=Path.Combine(gestureData,"gesture-lease.lock");
+        try {RestoreGestures();} catch(Exception ex){LastError="Touchpad recovery: "+ex.Message;}
         RecoverRemote();
         Recover();
         AppDomain.CurrentDomain.ProcessExit += (_,_) => Release();
@@ -98,11 +109,12 @@ internal static partial class Program {
                         LastError=null;
                         try {
                             ConfigureApplications(root);
+                            BlockKeyboard=root.TryGetProperty("keyboard",out var keyboard)&&keyboard.GetBoolean();
+                            if(BlockKeyboard)ApplyGestures();
                             if(root.TryGetProperty("remote",out var remote)&&remote.GetBoolean())ApplyRemote();
                             if(File.Exists(JournalPath))throw new IOException("Previous storage policy recovery is pending.");
                             var storage=root.TryGetProperty("usb",out var usb)&&usb.GetBoolean();
                             if(storage) ApplyStorage();
-                            BlockKeyboard=root.TryGetProperty("keyboard",out var keyboard)&&keyboard.GetBoolean();
                             AllowCopy=root.TryGetProperty("copy_paste",out var copy)&&copy.GetBoolean();
                             if(BlockKeyboard) StartHook();
                             CaptureProtected=ExamWindow!=0&&Native.GetWindowDisplayAffinity(ExamWindow,out var affinity)&&affinity==0x11;
@@ -163,8 +175,9 @@ internal static partial class Program {
         storage_ready=StorageEnforced&&StorageReady,storage_check_pending=StorageEnforced&&!StorageReady,
         storage_validation=StorageEnforced&&StorageReady?(CachedStorage.Count==0?"policy applied; no attached USB storage":"attached volumes denied"):"not ready",
         // Low-level hook is narrower than Windows Keyboard Filter; SAS is explicitly unsupported.
-        keyboard_enforced=Hook!=0&&BlockKeyboard,
-        keyboard_scope="Alt/Win chords, function keys, capture keys, unapproved Ctrl chords; Ctrl+Alt+F12 recovery; not Ctrl+Alt+Del",
+        keyboard_enforced=Hook!=0&&BlockKeyboard&&Gestures?.Active==true,
+        gestures_enforced=Active&&BlockKeyboard&&Gestures?.Active==true,
+        keyboard_scope="Alt/Win chords, function/capture keys, unapproved Ctrl chords, 3/4-finger touchpad shell gestures; Ctrl+Alt+F12 recovery; not Ctrl+Alt+Del",
         application_enforced=Active&&CloseApplications, remote_enforced=RemoteEnforced,
         unapproved_applications=Active&&CloseApplications?UnapprovedWindows():new List<object>(),
         remote_session=Native.GetSystemMetrics(0x1000)!=0,
@@ -224,7 +237,8 @@ internal static partial class Program {
             BlockKeyboard=false;ThreadPool.QueueUserWorkItem(_=>{Emit(new{type="event",kind="emergency_release",detail=new{sequence="Ctrl+Alt+F12"}});Release();});
             return Native.CallNextHookEx(Hook,code,wParam,lParam);
         }
-        bool blocked=KeyBlocked(vk,ctrl,alt,AllowCopy) || (!AllowCopy&&(Native.GetAsyncKeyState(0x10)&0x8000)!=0&&vk is 0x2D or 0x2E);
+        var win=(Native.GetAsyncKeyState(0x5B)&0x8000)!=0 || (Native.GetAsyncKeyState(0x5C)&0x8000)!=0;
+        bool blocked=KeyBlocked(vk,ctrl,alt,AllowCopy,win) || (!AllowCopy&&(Native.GetAsyncKeyState(0x10)&0x8000)!=0&&vk is 0x2D or 0x2E);
         if(blocked) {
             if(down)ThreadPool.QueueUserWorkItem(_=>Emit(new{type="event",kind="shortcut_blocked",detail=new{vk,ctrl,alt,blocked=true}}));
             return 1;
@@ -257,9 +271,9 @@ internal static partial class Program {
     static void CheckLease() {
         if(Active&&Environment.TickCount64-Lease>10000){Release();Emit(new{type="event",kind="guard_lost",detail=new{reason="lease_expired",restrictions_released=true}});}
     }
-    static bool KeyBlocked(int vk,bool ctrl,bool alt,bool allowCopy=false) {
+    static bool KeyBlocked(int vk,bool ctrl,bool alt,bool allowCopy=false,bool win=false) {
         if(vk is 0x10 or 0x11 or 0x12 or 0xA0 or 0xA1 or 0xA2 or 0xA3 or 0xA4 or 0xA5)return false;
-        if(vk is 0x5B or 0x5C or 0x2C or 0x1B || vk>=0x70&&vk<=0x87 || alt)return true;
+        if(vk is 0x5B or 0x5C or 0x2C or 0x1B || vk>=0x70&&vk<=0x87 || alt || win)return true;
         if(!ctrl)return false;
         if(vk is 0x41 or 0x5A or 0x59 or 0x25 or 0x27 or 0x08 or 0x2E)return false;
         if(allowCopy&&vk is 0x43 or 0x56 or 0x58)return false;
@@ -275,6 +289,7 @@ internal static partial class Program {
         CaptureProtected=false;
         try {RestoreStorage();} catch(Exception ex){LastError=ex.Message;}
         try {RestoreRemote();} catch(Exception ex){LastError="Remote recovery: "+ex.Message;}
+        try {RestoreGestures();} catch(Exception ex){LastError="Touchpad recovery: "+ex.Message;}
         }
     }
 }

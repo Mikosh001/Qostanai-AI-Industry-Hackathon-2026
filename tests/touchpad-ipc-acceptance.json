@@ -1,0 +1,22 @@
+{
+  "passed": true,
+  "windowsBuild": "10.0.26200",
+  "cycles": [
+    {
+      "exit": "explicit release",
+      "activationMs": 77,
+      "keyboardAndLiveGesturesVerified": true,
+      "secondHelperRejectedWithoutRestoringActivePolicy": true
+    },
+    {
+      "exit": "stdin EOF",
+      "activationMs": 75,
+      "keyboardAndLiveGesturesVerified": true,
+      "secondHelperRejectedWithoutRestoringActivePolicy": true
+    }
+  ],
+  "originalSettingsRestored": true,
+  "globalApplicationClosure": false,
+  "usbOrRemoteRestrictions": false,
+  "physicalSwipeTest": false
+}

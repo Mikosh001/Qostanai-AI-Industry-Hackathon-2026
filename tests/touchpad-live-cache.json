@@ -1,0 +1,64 @@
+{
+  "type": "gesture_live_regression",
+  "passed": true,
+  "blocked": true,
+  "restored": true,
+  "lease_restored": true,
+  "windows_build": 26200,
+  "before": {
+    "ThreeFingerTapEnabled": {
+      "registry": 1,
+      "live": 1
+    },
+    "FourFingerTapEnabled": {
+      "registry": 2,
+      "live": 2
+    },
+    "ThreeFingerSlideEnabled": {
+      "registry": 1,
+      "live": 1
+    },
+    "FourFingerSlideEnabled": {
+      "registry": 2,
+      "live": 2
+    }
+  },
+  "during": {
+    "ThreeFingerTapEnabled": {
+      "registry": 0,
+      "live": 0
+    },
+    "FourFingerTapEnabled": {
+      "registry": 0,
+      "live": 0
+    },
+    "ThreeFingerSlideEnabled": {
+      "registry": 0,
+      "live": 0
+    },
+    "FourFingerSlideEnabled": {
+      "registry": 0,
+      "live": 0
+    }
+  },
+  "after": {
+    "ThreeFingerTapEnabled": {
+      "registry": 1,
+      "live": 1
+    },
+    "FourFingerTapEnabled": {
+      "registry": 2,
+      "live": 2
+    },
+    "ThreeFingerSlideEnabled": {
+      "registry": 1,
+      "live": 1
+    },
+    "FourFingerSlideEnabled": {
+      "registry": 2,
+      "live": 2
+    }
+  },
+  "error": null,
+  "scope": "temporarily disables only three/four-finger shell gestures, then restores them; no other apps closed; no keyboard hook, USB or remote restrictions"
+}

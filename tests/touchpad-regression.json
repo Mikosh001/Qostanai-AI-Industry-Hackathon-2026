@@ -1,0 +1,23 @@
+{
+  "type": "gesture_regression",
+  "passed": true,
+  "checks": 14,
+  "cases": [
+    "live cache and registry blocked after durable backup",
+    "unchanged policy does not rewrite",
+    "repeated activation idempotent",
+    "tampered gestures reblocked",
+    "original settings restored",
+    "release idempotent",
+    "absent registry value stays absent",
+    "existing recovery record is never overwritten",
+    "new process restores saved settings after crash",
+    "registry alone cannot pass and rollback restores values",
+    "unknown cache layout rejected before mutation",
+    "failed restoration retains durable recovery record",
+    "restoration can be retried",
+    "invalid journal rejected without setting writes"
+  ],
+  "scope": "in-memory settings and isolated temporary files; no Windows settings changed",
+  "error": null
+}

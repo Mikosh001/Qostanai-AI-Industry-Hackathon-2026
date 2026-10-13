@@ -67,6 +67,8 @@ const labels: Record<string, string> = {
   screen_capture_error: "Экран жазбасы тоқтады",
   session_started: "Емтихан басталды",
   protected_desktop_left: "Windows қорғалған жұмыс ортасы ауысты",
+  gesture_settings_restored: "Тачпад қимылдарының шектеуі қалпына келтірілді",
+  gesture_enforcement_failed: "Тачпад қимылдарының қорғанысы расталмады",
   phone_detected: "Телефон анықталды",
   phone_raised: "Телефон экран алдына көтерілді",
   face_absent: "Бет көрінбейді",
@@ -217,6 +219,8 @@ function interruptionMessage(reason: string) {
     emergency_release:
       "Апаттық шығу пернелері басылды. Компьютер шектеулері босатылды.",
     remote_enforcement_failed: "Қашықтан басқаруға тыйым салу расталмады.",
+    gesture_enforcement_failed:
+      "Тачпад қимылдарының қорғанысы расталмады. Қосымшаны қайта іске қосыңыз.",
     backend_or_guard_connection_lost:
       "Бақылау қызметімен байланыс жоғалды. Қосымшаны қайта іске қосыңыз.",
     guard_process_exited: "Windows қорғаныс қызметі жабылды.",

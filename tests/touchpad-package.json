@@ -1,0 +1,19 @@
+{
+  "passed": true,
+  "version": "1.5.2",
+  "scope": "packaged application",
+  "checks": [
+    "desktop/main.cjs",
+    "desktop/focus-recovery.cjs",
+    "desktop/start-flow.cjs",
+    "desktop/policy.cjs",
+    "desktop/navigation.cjs",
+    "desktop/preload.cjs",
+    "guard/Sergek.Guard.exe",
+    "guard/Sergek.Guard.dll",
+    "backend/sergek-backend.exe",
+    "ui/index.html",
+    "ui/assets/index-CLZafZOa.css",
+    "ui/assets/index-DPrQBi8S.js"
+  ]
+}
