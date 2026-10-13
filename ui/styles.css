@@ -1450,3 +1450,27 @@ pre {
     min-width: 0;
   }
 }
+details.security-center {
+  margin-bottom: 20px;
+  padding: 18px 24px;
+}
+.security-center summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  list-style: none;
+}
+.security-center summary > span {
+  margin-left: auto;
+  font-size: 14px;
+}
+.security-center .check-row:first-of-type {
+  margin-top: 18px;
+}
+.security-center p {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--muted);
+}

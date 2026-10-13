@@ -16,6 +16,7 @@ const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
     "--self-test-close",
     "--self-test-window-close",
     "--self-test-gestures",
+    "--self-test-security",
   ]) {
     const result = spawnSync(exe, [flag], {
       windowsHide: true,

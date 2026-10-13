@@ -1,0 +1,53 @@
+{
+  "date": "2026-10-13",
+  "automatedTests": {
+    "python": 195,
+    "desktop": 63,
+    "browser": 15,
+    "total": 273
+  },
+  "nativeRegressionChecks": 26,
+  "productionEntryScenarios": 6,
+  "npmAudit": {
+    "scope": "all npm dependencies, including devDependencies",
+    "vulnerabilities": {
+      "info": 0,
+      "low": 0,
+      "moderate": 0,
+      "high": 0,
+      "critical": 0,
+      "total": 0
+    },
+    "buildProxyOverride": "global-agent 4.1.3"
+  },
+  "pythonPipCheck": "passed; dependency compatibility, not CVE scan",
+  "manualFullProtectedExam": "pending user acceptance; not claimed as passed",
+  "malwareSamplesUsed": false,
+  "competitorBenchmarkConducted": false,
+  "receipts": [
+    "security-native-acceptance.json",
+    "security-native-regression.json",
+    "security-entry-acceptance.json",
+    "security-moodle-software.json",
+    "security-package.json",
+    "security-installed.json"
+  ],
+  "packageFiles": 1185,
+  "packageBytes": 552465583,
+  "nativeIpc": {
+    "requests": 250,
+    "p95Ms": 13,
+    "maxMs": 19,
+    "leaseSurvived": true
+  },
+  "installerRegression": "NSIS omitted unused ARM64 PortAudio DLLs; x64 package filtered identically to pinned manifest; all installed resource hashes checked",
+  "installedStartup": {
+    "healthOk": true,
+    "version": "1.6.0",
+    "setupRequired": false,
+    "windowTitle": "Sergек Proctor",
+    "resourceVerificationMs": 556,
+    "standardUsersWritePermission": false,
+    "applicationClosedByUser": true
+  }
+}

@@ -35,6 +35,12 @@ internal static partial class Program {
     static void Emit(object value) { lock(Sync) { Console.WriteLine(JsonSerializer.Serialize(value)); Console.Out.Flush(); } }
     static bool Admin() => new WindowsPrincipal(WindowsIdentity.GetCurrent()).IsInRole(WindowsBuiltInRole.Administrator);
     static async Task Main(string[] args) {
+        if(args.Contains("--self-test-security")){Environment.ExitCode=SecurityRegression()?0:1;return;}
+        if(args.Contains("--probe-antimalware")) {
+            try{AntivirusHealth=ReadAntimalware();AntivirusCheckedTick=Environment.TickCount64;Emit(new{type="antimalware_probe",status=AntimalwareStatus(),scanner_signature_verified=MicrosoftAuthenticode(DefenderScanner()),changes=false});}
+            catch(Exception ex){Emit(new{type="antimalware_probe",available=false,error=ex.Message,changes=false});Environment.ExitCode=1;}
+            return;
+        }
         if(args.Contains("--probe-gestures")){Environment.ExitCode=ProbeGestures()?0:1;return;}
         if(args.Contains("--self-test-gestures")){Environment.ExitCode=GestureRegression()?0:1;return;}
         if(args.Contains("--self-test-gestures-live")){Environment.ExitCode=LiveGestureRegression()?0:1;return;}
@@ -88,6 +94,7 @@ internal static partial class Program {
         using var timer=new System.Threading.Timer(_=>Watch(),null,1000,1000);
         using var leaseTimer=new System.Threading.Timer(_=>CheckLease(),null,500,500);
         using var applicationTimer=new System.Threading.Timer(_=>WatchApplications(),null,100,100);
+        using var securityTimer=new System.Threading.Timer(_=>QueueAntimalwareCheck(),null,0,10000);
         Emit(new {type="ready",admin=Admin(),recovery_pending=File.Exists(JournalPath),error=LastError});
         try {
             string? line;
@@ -98,6 +105,9 @@ internal static partial class Program {
                     var id=root.TryGetProperty("id",out var idValue)?idValue.GetString():null;
                     if(command=="heartbeat") {Lease=Environment.TickCount64;Emit(new {type="response",id,status=Status()});}
                     else if(command=="foreground") {Emit(new {type="response",id,status=ForegroundStatus()});}
+                    else if(command=="security-refresh") {QueueAntimalwareCheck();Emit(new{type="response",id,status=Status()});}
+                    else if(command=="scan-antimalware") {QueueAntimalwareScan();Emit(new{type="response",id,status=Status()});}
+                    else if(command=="verify-resources") {QueueResourceVerification(root);Emit(new{type="response",id,status=Status()});}
                     else if(command=="probe") {
                         // WMI runs in the independent watcher, never in the lease IPC queue.
                         SetForbidden(root);Emit(new {type="response",id,status=Status()});
@@ -109,6 +119,10 @@ internal static partial class Program {
                         LastError=null;
                         try {
                             ConfigureApplications(root);
+                            AntivirusRequired=root.TryGetProperty("antimalware",out var av)&&av.GetBoolean();
+                            IntegrityRequired=root.TryGetProperty("package_integrity",out var integrity)&&integrity.GetBoolean();
+                            if(AntivirusRequired&&!AntimalwareReady())throw new IOException("Антивирус қорғанысы расталмады. Қорғаныс орталығын тексеріңіз.");
+                            if(IntegrityRequired&&Resources?.Ready!=true)throw new IOException("Қосымша файлдарының тұтастығы расталмады");
                             BlockKeyboard=root.TryGetProperty("keyboard",out var keyboard)&&keyboard.GetBoolean();
                             if(BlockKeyboard)ApplyGestures();
                             if(root.TryGetProperty("remote",out var remote)&&remote.GetBoolean())ApplyRemote();
@@ -128,7 +142,7 @@ internal static partial class Program {
                     else if(command=="shutdown") {Release();Closing=true;Emit(new {type="response",id,status=Status()});}
                 } catch(Exception ex) {Emit(new {type="error",error=ex.Message});}
             }
-        } finally {Closing=true;Release();}
+        } finally {Closing=true;Release();Resources?.Dispose();try{ScanProcess?.Kill();}catch{}}
     }
     static void SetForbidden(JsonElement root) {
         if(root.TryGetProperty("forbidden",out var list)) Forbidden=list.EnumerateArray().Select(x=>x.GetString()??"").ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -176,6 +190,7 @@ internal static partial class Program {
         storage_validation=StorageEnforced&&StorageReady?(CachedStorage.Count==0?"policy applied; no attached USB storage":"attached volumes denied"):"not ready",
         // Low-level hook is narrower than Windows Keyboard Filter; SAS is explicitly unsupported.
         keyboard_enforced=Hook!=0&&BlockKeyboard&&Gestures?.Active==true,
+        antimalware=AntimalwareStatus(),package_integrity=ResourceStatus(),
         gestures_enforced=Active&&BlockKeyboard&&Gestures?.Active==true,
         keyboard_scope="Alt/Win chords, function/capture keys, unapproved Ctrl chords, 3/4-finger touchpad shell gestures; Ctrl+Alt+F12 recovery; not Ctrl+Alt+Del",
         application_enforced=Active&&CloseApplications, remote_enforced=RemoteEnforced,
@@ -269,7 +284,10 @@ internal static partial class Program {
         }
     }
     static void CheckLease() {
-        if(Active&&Environment.TickCount64-Lease>10000){Release();Emit(new{type="event",kind="guard_lost",detail=new{reason="lease_expired",restrictions_released=true}});}
+        lock(RestrictionSync) {
+            if(Active&&Environment.TickCount64-Lease>10000){Release();Emit(new{type="event",kind="guard_lost",detail=new{reason="lease_expired",restrictions_released=true}});}
+            CheckSecurityExpiry();
+        }
     }
     static bool KeyBlocked(int vk,bool ctrl,bool alt,bool allowCopy=false,bool win=false) {
         if(vk is 0x10 or 0x11 or 0x12 or 0xA0 or 0xA1 or 0xA2 or 0xA3 or 0xA4 or 0xA5)return false;
@@ -282,6 +300,7 @@ internal static partial class Program {
     static void Release() {
         lock(RestrictionSync) {
         Active=false;BlockKeyboard=false;
+        AntivirusRequired=false;IntegrityRequired=false;
         CloseApplications=false;
         if(HookThreadId!=0)Native.PostThreadMessage(HookThreadId,0x12,0,0);
         if(HookThread!=null&&HookThread!=Thread.CurrentThread)HookThread.Join(1500);

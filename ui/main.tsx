@@ -69,6 +69,10 @@ const labels: Record<string, string> = {
   protected_desktop_left: "Windows қорғалған жұмыс ортасы ауысты",
   gesture_settings_restored: "Тачпад қимылдарының шектеуі қалпына келтірілді",
   gesture_enforcement_failed: "Тачпад қимылдарының қорғанысы расталмады",
+  antimalware_scan_completed: "Қосымша файлдарын антивируспен тексеру аяқталды",
+  antimalware_protection_lost:
+    "Антивирус қорғанысы расталмады. Қорғаныс орталығын тексеріңіз.",
+  package_integrity_lost: "Қосымша файлдарының тұтастығы расталмады",
   phone_detected: "Телефон анықталды",
   phone_raised: "Телефон экран алдына көтерілді",
   face_absent: "Бет көрінбейді",
@@ -219,6 +223,9 @@ function interruptionMessage(reason: string) {
     emergency_release:
       "Апаттық шығу пернелері басылды. Компьютер шектеулері босатылды.",
     remote_enforcement_failed: "Қашықтан басқаруға тыйым салу расталмады.",
+    antimalware_protection_lost:
+      "Антивирус қорғанысы расталмады. Қорғаныс орталығын тексеріңіз.",
+    package_integrity_lost: "Қосымша файлдарының тұтастығы расталмады",
     gesture_enforcement_failed:
       "Тачпад қимылдарының қорғанысы расталмады. Қосымшаны қайта іске қосыңыз.",
     backend_or_guard_connection_lost:
@@ -298,12 +305,36 @@ function Student({
   const [portalAuthenticated, setPortalAuthenticated] = useState(false);
   const [cameraStream, setCameraStream] = useState("");
   const [guard, setGuard] = useState<any>(null);
+  const [securityInfo, setSecurityInfo] = useState<any>(null);
   const [result, setResult] = useState<any>(null);
   const [exam, setExam] = useState<any>(null);
   const [question, setQuestion] = useState(0);
   const [saved, setSaved] = useState("");
   const [seconds, setSeconds] = useState(1800);
   const desktop = !!window.sergek;
+  useEffect(() => {
+    if (!desktop) return;
+    let stopped = false,
+      pending = false;
+    const refresh = async () => {
+      if (pending) return;
+      pending = true;
+      try {
+        const info = await invoke("security-status");
+        if (!stopped) setSecurityInfo(info);
+      } catch {
+        if (!stopped) setSecurityInfo(null);
+      } finally {
+        pending = false;
+      }
+    };
+    refresh();
+    const timer = setInterval(refresh, 2500);
+    return () => {
+      stopped = true;
+      clearInterval(timer);
+    };
+  }, [desktop]);
   const action = async (fn: () => Promise<void>) => {
     setBusy(true);
     setError("");
@@ -542,6 +573,22 @@ function Student({
                 )}{" "}
               </div>
             )}
+            {desktop && (
+              <SecurityCenter
+                info={securityInfo}
+                busy={busy}
+                onScan={() =>
+                  action(async () => {
+                    setSecurityInfo(await invoke("security-scan"));
+                  })
+                }
+                onRefresh={() =>
+                  action(async () => {
+                    setSecurityInfo(await invoke("security-refresh"));
+                  })
+                }
+              />
+            )}
             <div className="welcome-grid">
               <section className="card form-card">
                 <div className="section-title">
@@ -757,6 +804,22 @@ function Student({
               </section>
               <section className="card checklist">
                 <h2>{t("Дайындық нәтижесі")}</h2>
+                {desktop && (
+                  <SecurityCenter
+                    info={securityInfo}
+                    busy={busy}
+                    onScan={() =>
+                      action(async () => {
+                        setSecurityInfo(await invoke("security-scan"));
+                      })
+                    }
+                    onRefresh={() =>
+                      action(async () => {
+                        setSecurityInfo(await invoke("security-refresh"));
+                      })
+                    }
+                  />
+                )}
                 {!cameraRequired && (
                   <div className="notice">
                     <AlertTriangle size={18} />
@@ -1107,6 +1170,93 @@ function CheckRow({
         <small>{friendlyError(detail)}</small>
       </div>
     </div>
+  );
+}
+
+function antimalwareDetail(av: any) {
+  if (av?.scan?.state === "running") return t("Қосымша файлдары сканерленуде…");
+  if (av?.active_threats > 0)
+    return t(
+      "Microsoft Defender белсенді қауіп тіркеді. Windows қауіпсіздігін тексеріңіз.",
+    );
+  if (av?.available && (!av.realtime_enabled || av.tamper_protected === false))
+    return t("Windows антивирус қорғанысын қосу қажет.");
+  if (av?.signature_age_days > 7)
+    return t("Антивирустың вирус базасын жаңарту қажет.");
+  return t(
+    av?.ready
+      ? "Microsoft Defender қосулы, белсенді қауіп тіркелмеген."
+      : "Қорғаныс күйі тексерілуде. Дайын болмаса, қорғаныс орталығын қараңыз.",
+  );
+}
+
+function SecurityCenter({
+  info,
+  busy,
+  onScan,
+  onRefresh,
+}: {
+  info: any;
+  busy: boolean;
+  onScan: () => void;
+  onRefresh: () => void;
+}) {
+  const av = info?.antimalware,
+    scan = av?.scan?.state || "idle";
+  const ready =
+    av?.ready === true && (!info?.packaged || info?.integrity?.ready === true);
+  const scanText: Record<string, string> = {
+    idle: "Файлдарды тексеруге болады",
+    running: "Қосымша файлдары сканерленуде…",
+    clean: "Сканерлеу аяқталды, қауіп анықталмады.",
+    attention:
+      "Қауіп немесе сканерлеу қатесі бар. Windows қауіпсіздігін тексеріңіз.",
+    error: "Сканерлеу расталмады. Қайта тексеріңіз.",
+  };
+  return (
+    <details className="card security-center">
+      <summary>
+        <ShieldCheck size={20} />
+        <strong>{t("Компьютер қорғанысы")}</strong>
+        <span className={ready ? "good" : "warn"}>
+          {t(ready ? "Тексерілді" : "Тексеру қажет")}
+        </span>
+      </summary>
+      <CheckRow
+        title={t("Антивирус қорғанысы")}
+        ok={av?.ready === true}
+        detail={antimalwareDetail(av)}
+      />
+      {info?.packaged && (
+        <CheckRow
+          title={t("Қосымша файлдары")}
+          ok={info?.integrity?.ready === true}
+          detail={
+            info?.integrity?.ready
+              ? t("Файлдар тексерілді және ауыстырудан қорғалған.")
+              : t("Қосымша файлдарының тұтастығы расталмады")
+          }
+        />
+      )}
+      <p role="status">{t(scanText[scan] || scanText.error)}</p>
+      <p>
+        {t(
+          "Сканер Microsoft Defender арқылы тек осы қосымшаның файлдарын тексереді. Файлдарды автоматты жою орындалмайды.",
+        )}
+      </p>
+      <div className="button-row">
+        <button
+          className="btn secondary"
+          disabled={busy || scan === "running"}
+          onClick={onScan}
+        >
+          {t("Файлдарды сканерлеу")}
+        </button>
+        <button className="btn text" disabled={busy} onClick={onRefresh}>
+          {t("Күйін жаңарту")}
+        </button>
+      </div>
+    </details>
   );
 }
 
@@ -1934,6 +2084,10 @@ function Teacher({
                     ["remote_block", t("Қашықтан басқаруды бұғаттау")],
                     ["usb_block", t("Сыртқы жинақтауыштарды шектеу")],
                     ["keyboard_block", t("Перне қорғанысы")],
+                    [
+                      "antimalware_required",
+                      t("Антивирус қорғанысын міндетті тексеру"),
+                    ],
                     ["single_monitor", t("Бір монитор ғана")],
                     ["paper_allowed", t("Қағазға жазуға рұқсат")],
                     ["copy_paste", t("Көшіру / қоюға рұқсат")],

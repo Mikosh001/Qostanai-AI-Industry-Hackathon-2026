@@ -1,0 +1,29 @@
+{
+  "passed": true,
+  "windowsBuild": "10.0.26200",
+  "resourceFiles": 1185,
+  "resourceVerificationMs": 747,
+  "fileWriteDenied": true,
+  "unexpectedFileReleasedGuard": true,
+  "defender": {
+    "ready": true,
+    "tamperProtected": true,
+    "signatureAgeDays": 1,
+    "activeThreats": 0,
+    "scan": {
+      "state": "clean",
+      "exit_code": 0,
+      "checked_at": "2026-10-13T16:57:01.0615362+00:00",
+      "reason": null
+    }
+  },
+  "ipc": {
+    "requests": 250,
+    "p95Ms": 13,
+    "maxMs": 19,
+    "leaseSurvived": true
+  },
+  "otherApplicationsClosed": false,
+  "usbKeyboardRemotePolicies": false,
+  "malwareSamplesUsed": false
+}

@@ -290,6 +290,37 @@ def test_strict_rejects_remote_session_even_with_other_guard_claims(client):
     assert response.status_code == 409 and "Қашықтан" in response.text
 
 
+@pytest.mark.parametrize("av", [None, [], "yes", {}, {"ready": "true", "status_age_seconds": 0}, {"ready": True}, {"ready": True, "status_age_seconds": -1}, {"ready": True, "status_age_seconds": 46}, {"ready": True, "status_age_seconds": True}])
+def test_antimalware_start_rejects_unknown_malformed_and_stale_status(client, av):
+    value = create(client, mode="strict")
+    sid = value["session"]["id"]
+    response = client.post(f"/api/student/{sid}/start", headers=headers(value), json={"guard": {"antimalware": av}, "desktop": {"displays": 1}})
+    assert response.status_code == 409 and "Антивирус" in response.text
+    assert module.store.session(sid)["status"] == "preflight"
+
+
+@pytest.mark.parametrize("guard,desktop", [(None, {}), ([], {}), ({}, None), ({}, []), ("bad", {})])
+def test_invalid_native_security_envelope_is_rejected_without_server_error(client, guard, desktop):
+    value = create(client, mode="strict")
+    response = client.post(f"/api/student/{value['session']['id']}/start", headers=headers(value), json={"guard": guard, "desktop": desktop})
+    assert response.status_code == 422
+
+
+def test_antimalware_system_events_are_not_student_observations():
+    from backend.event_policy import review_category
+    for kind in ["antimalware_scan_completed", "antimalware_protection_lost", "package_integrity_lost"]:
+        assert review_category(kind, {"technical": True}) == "technical"
+
+
+def test_antimalware_scan_audit_keeps_ambiguous_exit_code_technical_and_drops_paths(client):
+    response = client.post("/api/desktop/audit", headers={"x-sergek-desktop": "test-desktop-key"}, json={"action": "antimalware_scan_completed", "detail": {"exit_code": 2, "path": "private-file", "remediation": True}})
+    assert response.status_code == 200
+    row = module.store.db.execute("SELECT detail FROM audit WHERE action='antimalware_scan_completed'").fetchone()
+    detail = json.loads(row[0])
+    assert detail["status"] == "attention" and detail["technical"] is True and detail["remediation"] is False
+    assert "path" not in detail and "blocked" not in detail
+
+
 def test_launch_replay_and_platform_binding(client):
     key = "k" * 40
     module.store.set_setting("moodle_key", key)

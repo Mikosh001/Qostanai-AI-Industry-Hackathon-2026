@@ -13,6 +13,23 @@ const fs = require("node:fs");
 const crypto = require("node:crypto");
 const net = require("node:net");
 const readline = require("node:readline");
+const {
+  startupViolations,
+  childEnvironment,
+  trustedFrame,
+  validatePayload,
+} = require("./runtime-security.cjs");
+const unsafeStartup = startupViolations(
+  process.argv,
+  process.env,
+  app.isPackaged,
+);
+if (unsafeStartup.length) {
+  process.stderr.write(
+    "Sergек: unsafe startup rejected (" + unsafeStartup.join(", ") + ")\n",
+  );
+  app.exit(78);
+}
 const { allowedUrl, blockedInput } = require("./policy.cjs");
 const { startProtectedExam } = require("./start-flow.cjs");
 const { createFocusRecovery } = require("./focus-recovery.cjs");
@@ -246,7 +263,7 @@ function startGuard() {
   }
   guard = spawn(executable, [], {
     windowsHide: true,
-    env: { ...process.env, SERGEK_GUARD_DATA: data },
+    env: childEnvironment(process.env, { SERGEK_GUARD_DATA: data }),
     stdio: ["pipe", "pipe", "pipe"],
   });
   readline.createInterface({ input: guard.stdout }).on("line", async (line) => {
@@ -261,6 +278,12 @@ function startGuard() {
           task.resolve(message.status);
         }
       } else if (message.type === "event") {
+        if (message.kind === "antimalware_scan_completed") {
+          await api("/api/desktop/audit", "POST", {
+            action: message.kind,
+            detail: { ...message.detail, sid: current?.session.id || null },
+          });
+        }
         const fatal = [
           "emergency_release",
           "guard_lost",
@@ -269,6 +292,8 @@ function startGuard() {
           "storage_enforcement_failed",
           "protected_desktop_left",
           "gesture_enforcement_failed",
+          "antimalware_protection_lost",
+          "package_integrity_lost",
         ].includes(message.kind);
         if (fatal) {
           guardFailure =
@@ -285,6 +310,10 @@ function startGuard() {
               gesture_enforcement_failed:
                 "Тачпад қимылдарының қорғанысы расталмады",
               emergency_release: "Апаттық шығу орындалды",
+              antimalware_protection_lost:
+                "Антивирус қорғанысы расталмады. Қорғаныс орталығын тексеріңіз.",
+              package_integrity_lost:
+                "Қосымша файлдарының тұтастығы расталмады",
             }[message.kind] || message.kind;
           log(
             "guard failure: " +
@@ -507,6 +536,8 @@ async function activateProtection() {
     trusted_pids: [process.pid, backend?.pid, guard?.pid].filter(Boolean),
     usb: profile.policy.usb_block,
     keyboard: profile.policy.keyboard_block,
+    antimalware: profile.policy.antimalware_required,
+    package_integrity: app.isPackaged,
     copy_paste: profile.policy.copy_paste,
     window: hwnd,
     forbidden: profile.policy.forbidden_processes,
@@ -851,6 +882,8 @@ async function startCurrentExam() {
     const result = await startProtectedExam({
       strict: current.session.data.mode === "strict",
       requireGestures: profile.policy.keyboard_block,
+      requireAntimalware: profile.policy.antimalware_required,
+      requireIntegrity: app.isPackaged,
       protect: async () => window.setContentProtection(true),
       activate: activateProtection,
       probe: async () => {
@@ -900,16 +933,35 @@ async function startCurrentExam() {
 }
 
 function validateSender(event) {
-  if (
-    !window ||
-    event.sender !== window.webContents ||
-    !event.senderFrame ||
-    new URL(event.senderFrame.url).origin !== origin
-  )
+  if (!trustedFrame(event, window?.webContents, origin))
     throw new Error("Untrusted IPC sender");
 }
 ipcMain.handle("sergek:command", async (event, command, value) => {
   validateSender(event);
+  validatePayload(command, value);
+  if (
+    command === "security-status" ||
+    command === "security-scan" ||
+    command === "security-refresh"
+  ) {
+    if (
+      command !== "security-status" &&
+      (starting || current?.session.status === "active")
+    )
+      throw Error("Файлдарды сканерлеуді емтиханға дейін бастаңыз");
+    guardState = await guardCommand(
+      command === "security-scan"
+        ? "scan-antimalware"
+        : command === "security-refresh"
+          ? "security-refresh"
+          : "probe",
+    );
+    return {
+      antimalware: guardState.antimalware,
+      integrity: guardState.package_integrity,
+      packaged: app.isPackaged,
+    };
+  }
   if (command === "get-language") {
     try {
       const saved = JSON.parse(
@@ -1106,7 +1158,7 @@ async function startBackend() {
   backend = spawn(executable, args, {
     cwd: app.isPackaged ? process.resourcesPath : root,
     windowsHide: true,
-    env,
+    env: childEnvironment(env, {}, app.isPackaged),
     stdio: ["ignore", "pipe", "pipe"],
   });
   backend.stdout.on("data", (value) => log("backend: " + value));
@@ -1161,8 +1213,40 @@ else {
       log(
         `startup: version=${app.getVersion()} pid=${process.pid} parent=${process.ppid}`,
       );
-      await startBackend();
+      const manifest = app.isPackaged
+        ? require("./resource-manifest.json")
+        : null;
+      if (app.isPackaged) {
+        if (manifest.schema !== 1 || !Array.isArray(manifest.files))
+          throw Error("Қосымша файлдарының тұтастығы расталмады");
+        await require("./bootstrap-integrity.cjs").verifyGuardBootstrap(
+          process.resourcesPath,
+          manifest.files,
+        );
+      }
       startGuard();
+      if (app.isPackaged) {
+        if (manifest.schema !== 1 || !Array.isArray(manifest.files))
+          throw Error("Қосымша файлдарының тұтастығы расталмады");
+        await guardCommand("verify-resources", { entries: manifest.files });
+        const deadline = Date.now() + 60000;
+        while (Date.now() < deadline) {
+          guardState = await guardCommand("probe");
+          if (guardState.package_integrity?.ready) break;
+          if (guardState.package_integrity?.error)
+            throw Error("Қосымша файлдарының тұтастығы расталмады");
+          await delay(100);
+        }
+        if (!guardState.package_integrity?.ready)
+          throw Error("Қосымша файлдарын тексеру уақыты аяқталды");
+        log(
+          "package integrity: files=" +
+            guardState.package_integrity.files +
+            " ms=" +
+            guardState.package_integrity.duration_ms,
+        );
+      }
+      await startBackend();
       window = new BrowserWindow({
         width: 1380,
         height: 900,

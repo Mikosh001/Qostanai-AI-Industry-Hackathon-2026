@@ -1,0 +1,50 @@
+{
+  "passed": true,
+  "releaseFusesVerified": true,
+  "arbitraryNodeExecutionPrevented": true,
+  "cases": [
+    {
+      "case": "remote debugging",
+      "rejected": true,
+      "injectionIgnored": false,
+      "stoppedByHarness": false,
+      "exitCode": 78
+    },
+    {
+      "case": "sandbox disabled",
+      "rejected": true,
+      "injectionIgnored": false,
+      "stoppedByHarness": false,
+      "exitCode": 78
+    },
+    {
+      "case": "developer test environment",
+      "rejected": true,
+      "injectionIgnored": false,
+      "stoppedByHarness": false,
+      "exitCode": 78
+    },
+    {
+      "case": "Node require injection",
+      "rejected": false,
+      "injectionIgnored": true,
+      "stoppedByHarness": true,
+      "exitCode": null
+    },
+    {
+      "case": "run-as-node",
+      "rejected": true,
+      "injectionIgnored": false,
+      "stoppedByHarness": false,
+      "exitCode": 78
+    },
+    {
+      "case": "CLR startup hook",
+      "rejected": true,
+      "injectionIgnored": false,
+      "stoppedByHarness": false,
+      "exitCode": 78
+    }
+  ],
+  "otherApplicationsAffected": false
+}

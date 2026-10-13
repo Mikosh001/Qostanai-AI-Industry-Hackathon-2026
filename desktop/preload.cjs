@@ -1,6 +1,9 @@
 const { contextBridge, ipcRenderer } = require("electron");
 const commands = new Set([
   "info",
+  "security-status",
+  "security-refresh",
+  "security-scan",
   "get-language",
   "set-language",
   "open-portal",

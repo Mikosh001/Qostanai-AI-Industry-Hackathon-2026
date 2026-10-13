@@ -1756,5 +1756,105 @@
   "Тачпад қимылдарының қорғанысы расталмады. Қосымшаны қайта іске қосыңыз.": {
     "ru": "Защита от переключения жестами тачпада не подтверждена. Перезапустите приложение.",
     "en": "Touchpad gesture protection was not verified. Restart the application."
+  },
+  "Компьютер қорғанысы": {
+    "ru": "Защита компьютера",
+    "en": "Computer protection"
+  },
+  "Тексерілді": {
+    "ru": "Проверено",
+    "en": "Verified"
+  },
+  "Тексеру қажет": {
+    "ru": "Нужна проверка",
+    "en": "Check required"
+  },
+  "Антивирус қорғанысы": {
+    "ru": "Антивирусная защита",
+    "en": "Antimalware protection"
+  },
+  "Microsoft Defender қосулы, белсенді қауіп тіркелмеген.": {
+    "ru": "Microsoft Defender включён, активных угроз не зарегистрировано.",
+    "en": "Microsoft Defender is enabled; no active threats are reported."
+  },
+  "Қорғаныс күйі тексерілуде. Дайын болмаса, қорғаныс орталығын қараңыз.": {
+    "ru": "Проверяем состояние защиты. Если она не готова, проверьте центр безопасности Windows.",
+    "en": "Checking protection status. If it is not ready, check Windows Security."
+  },
+  "Қосымша файлдары": {
+    "ru": "Файлы приложения",
+    "en": "Application files"
+  },
+  "Файлдар тексерілді және ауыстырудан қорғалған.": {
+    "ru": "Файлы проверены и защищены от замены.",
+    "en": "Files are verified and protected against replacement."
+  },
+  "Қосымша файлдарының тұтастығы расталмады": {
+    "ru": "Целостность файлов приложения не подтверждена",
+    "en": "Application file integrity was not verified"
+  },
+  "Файлдарды тексеруге болады": {
+    "ru": "Можно запустить проверку файлов",
+    "en": "File scan is available"
+  },
+  "Қосымша файлдары сканерленуде…": {
+    "ru": "Сканируются файлы приложения…",
+    "en": "Scanning application files…"
+  },
+  "Сканерлеу аяқталды, қауіп анықталмады.": {
+    "ru": "Сканирование завершено, угроз не обнаружено.",
+    "en": "Scan completed; no threats detected."
+  },
+  "Қауіп немесе сканерлеу қатесі бар. Windows қауіпсіздігін тексеріңіз.": {
+    "ru": "Обнаружена угроза или ошибка сканирования. Проверьте безопасность Windows.",
+    "en": "A threat or scan error was reported. Check Windows Security."
+  },
+  "Сканерлеу расталмады. Қайта тексеріңіз.": {
+    "ru": "Сканирование не подтверждено. Повторите проверку.",
+    "en": "Scan was not confirmed. Try again."
+  },
+  "Сканер Microsoft Defender арқылы тек осы қосымшаның файлдарын тексереді. Файлдарды автоматты жою орындалмайды.": {
+    "ru": "Microsoft Defender проверяет только файлы этого приложения. Автоматическое удаление файлов не выполняется.",
+    "en": "Microsoft Defender scans only this application’s files. No automatic file removal is performed."
+  },
+  "Файлдарды сканерлеу": {
+    "ru": "Сканировать файлы",
+    "en": "Scan files"
+  },
+  "Күйін жаңарту": {
+    "ru": "Обновить состояние",
+    "en": "Refresh status"
+  },
+  "Антивирус қорғанысын міндетті тексеру": {
+    "ru": "Обязательная проверка антивирусной защиты",
+    "en": "Require antimalware protection check"
+  },
+  "Антивирус қорғанысы расталмады. Қорғаныс орталығын тексеріңіз.": {
+    "ru": "Антивирусная защита не подтверждена. Проверьте центр безопасности Windows.",
+    "en": "Antimalware protection was not verified. Check Windows Security."
+  },
+  "Файлдарды сканерлеуді емтиханға дейін бастаңыз": {
+    "ru": "Запускайте сканирование файлов до экзамена",
+    "en": "Start file scanning before the exam"
+  },
+  "Қосымша файлдарын тексеру уақыты аяқталды": {
+    "ru": "Истекло время проверки файлов приложения",
+    "en": "Application file verification timed out"
+  },
+  "Microsoft Defender белсенді қауіп тіркеді. Windows қауіпсіздігін тексеріңіз.": {
+    "ru": "Microsoft Defender зарегистрировал активную угрозу. Проверьте безопасность Windows.",
+    "en": "Microsoft Defender reports an active threat. Check Windows Security."
+  },
+  "Windows антивирус қорғанысын қосу қажет.": {
+    "ru": "Необходимо включить антивирусную защиту Windows.",
+    "en": "Windows antimalware protection must be enabled."
+  },
+  "Антивирустың вирус базасын жаңарту қажет.": {
+    "ru": "Необходимо обновить антивирусные базы.",
+    "en": "Antimalware definitions must be updated."
+  },
+  "Қосымша файлдарын антивируспен тексеру аяқталды": {
+    "ru": "Антивирусная проверка файлов приложения завершена",
+    "en": "Application antimalware scan completed"
   }
 }

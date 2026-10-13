@@ -2,6 +2,8 @@
 async function startProtectedExam({
   strict,
   requireGestures = false,
+  requireAntimalware = false,
+  requireIntegrity = false,
   protect,
   activate,
   probe,
@@ -38,6 +40,12 @@ async function startProtectedExam({
       throw new Error(native.error || "Қорғаныс байланысы жоғалды");
     if (strict && requireGestures && !native.gestures_enforced)
       throw new Error("Тачпад қимылдарының қорғанысы расталмады");
+    if (strict && requireAntimalware && !native.antimalware?.ready)
+      throw new Error(
+        "Антивирус қорғанысы расталмады. Қорғаныс орталығын тексеріңіз.",
+      );
+    if (strict && requireIntegrity && !native.package_integrity?.ready)
+      throw new Error("Қосымша файлдарының тұтастығы расталмады");
     const result = await start(native);
     started = true;
     await open();

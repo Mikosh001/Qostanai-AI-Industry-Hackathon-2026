@@ -99,6 +99,31 @@ test("Verified touchpad protection allows the existing start transaction", async
   await startProtectedExam(f.options);
   assert.ok(f.calls.includes("start") && f.calls.includes("open"));
 });
+test("Antivirus status must be ready before the attempt starts", async () => {
+  const f = fixture({ requireAntimalware: true });
+  await assert.rejects(() => startProtectedExam(f.options), /Антивирус/);
+  assert.ok(!f.calls.includes("start"));
+  assert.equal(f.calls.at(-1), "release");
+});
+test("Unverified package files never reach the exam page", async () => {
+  const f = fixture({ requireIntegrity: true });
+  await assert.rejects(() => startProtectedExam(f.options), /тұтастығы/);
+  assert.ok(!f.calls.includes("start"));
+});
+test("Verified antivirus and locked package allow the existing start flow", async () => {
+  const f = fixture({
+    requireAntimalware: true,
+    requireIntegrity: true,
+    probe: async () => ({
+      available: true,
+      active: true,
+      antimalware: { ready: true },
+      package_integrity: { ready: true },
+    }),
+  });
+  await startProtectedExam(f.options);
+  assert.ok(f.calls.includes("open"));
+});
 test("Guard failure during readiness retains its cause and never starts the exam", async () => {
   let probes = 0;
   const f = fixture({

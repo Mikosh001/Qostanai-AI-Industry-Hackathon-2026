@@ -23,6 +23,7 @@ class Policy(BaseModel):
     remote_block: bool = True
     usb_block: bool = True
     keyboard_block: bool = True
+    antimalware_required: bool = True
     single_monitor: bool = True
     paper_allowed: bool = False
     copy_paste: bool = False

@@ -345,6 +345,7 @@ class Engine:
                         "application_close_failed",
                         "remote_control_blocked",
                         "remote_enforcement_failed",
+                        "antimalware_scan_completed",
                     )
                 )
             ):

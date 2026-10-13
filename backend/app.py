@@ -543,11 +543,19 @@ def desktop_interrupt(value: dict):
 @app.post("/api/desktop/audit", dependencies=[Depends(desktop)])
 def desktop_audit(value: dict):
     action = value.get("action")
-    if action not in {"resource_blocked", "navigation_blocked", "download_blocked", "window_blocked"}:
+    if action not in {"resource_blocked", "navigation_blocked", "download_blocked", "window_blocked", "antimalware_scan_completed"}:
         raise HTTPException(422, "Unsupported desktop audit action")
     detail = value.get("detail", {})
     if not isinstance(detail, dict):
         raise HTTPException(422, "Audit detail must be an object")
+    if action == "antimalware_scan_completed":
+        code = detail.get("exit_code")
+        if not isinstance(code, int) or isinstance(code, bool) or not -(2**31) <= code < 2**31:
+            raise HTTPException(422, "Invalid scan result")
+        store.audit(action, {"sid": str(detail.get("sid", ""))[:64], "exit_code": code,
+                            "status": "clean" if code == 0 else "attention" if code == 2 else "error",
+                            "scope": "application_files", "remediation": False, "technical": True})
+        return {"ok": True}
     safe = {k: str(detail.get(k, ""))[:160] for k in ("sid", "host", "resource_type")}
     safe["blocked"] = True
     store.audit(action, safe)
@@ -824,6 +832,8 @@ def start(sid: str, value: dict):
     vision = engine.status()
     native = value.get("guard", {})
     desktop_state = value.get("desktop", {})
+    if not isinstance(native, dict) or not isinstance(desktop_state, dict):
+        raise HTTPException(422, "Invalid desktop security state")
     errors = []
     policy = Profile(policy=item["data"]["policy"]).policy
     if policy.microphone_required and (
@@ -843,6 +853,9 @@ def start(sid: str, value: dict):
             errors.append("Фотоға түсіп, бастапқы бетті тіркеңіз")
     strict = item["data"]["mode"] == "strict"
     if strict:
+        av = native.get("antimalware")
+        if policy.antimalware_required and (not isinstance(av, dict) or av.get("ready") is not True or not isinstance(av.get("status_age_seconds"), (int, float)) or isinstance(av.get("status_age_seconds"), bool) or not 0 <= av["status_age_seconds"] <= 45):
+            errors.append("Антивирус қорғанысы расталмады. Қорғаныс орталығын тексеріңіз.")
         if policy.usb_block and not native.get("storage_ready"):
             errors.append("USB қорғанысы дайын емес: жүйелік шектеу немесе құрылғыны тексеру орындалмады")
         if policy.keyboard_block and not native.get("keyboard_enforced"):
