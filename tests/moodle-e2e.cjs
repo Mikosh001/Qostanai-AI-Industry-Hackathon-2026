@@ -203,6 +203,8 @@ const fs = require("node:fs");
     );
     if (created.data.moodle.userid !== String(exam.studentid))
       throw new Error("Signed identity was not bound");
+    if (process.env.SERGEK_SOFTWARE_ACCEPTANCE === "1" && created.data.mode !== "monitor")
+      throw new Error("Software acceptance requires a signed monitor-only fixture before proceeding");
     await local.getByRole("button", { name: "Тест бетіне өту" }).click();
     await expect
       .poll(

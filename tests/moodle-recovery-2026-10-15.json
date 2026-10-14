@@ -1,0 +1,45 @@
+{
+  "date": "2026-10-15",
+  "timezone": "Asia/Oral",
+  "passed": true,
+  "version": "1.6.1",
+  "cause": "Shared C: volume below 1 GiB safety reserve; hub HTTP 507 was displayed as a temporary connection failure",
+  "disk": {
+    "initialFreeGiBApprox": 0.26,
+    "finalFreeGiBApprox": 3.31,
+    "minimumReserveGiB": 1,
+    "cleanup": "NTFS compression of obsolete generated bundles; four obsolete generated installer EXE files removed; source, exam data and previous rollback package retained"
+  },
+  "automatedTests": {
+    "python": 199,
+    "desktop": 64,
+    "browser": 15,
+    "total": 278
+  },
+  "moodleSoftwareAcceptance": {
+    "passed": true,
+    "questions": 5,
+    "pausePerQuestionSeconds": 17,
+    "startupMilliseconds": 9532,
+    "started": "2026-10-14T21:12:54.888453+00:00",
+    "ended": "2026-10-14T21:14:56.312548+00:00",
+    "scope": "source Electron and real local Moodle; signed monitor-only software profile; camera, microphone, screen recording and OS restrictions disabled"
+  },
+  "installedStartup": {
+    "healthOk": true,
+    "setupRequired": false,
+    "windowTitle": "Sergек Proctor",
+    "strictProfileRestored": true,
+    "cameraRequired": true,
+    "microphoneRequired": true,
+    "antimalwareRequired": true,
+    "resourceFiles": 1185,
+    "resourceVerificationMs": 878
+  },
+  "fullPhysicalExamAcceptance": "not performed in this software regression",
+  "receipts": [
+    "moodle-recovery-software.json",
+    "moodle-recovery-package.json",
+    "moodle-recovery-installed.json"
+  ]
+}

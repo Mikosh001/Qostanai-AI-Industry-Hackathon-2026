@@ -16,6 +16,9 @@ async function waitForMoodle({ probe, alive, timeout = 10000, interval = 300 }) 
     } finally { clearTimeout(timer); }
     if (!alive()) throw new Error("Емтихан сессиясы тоқтатылды");
     if (state.ready) return;
+    // Capacity errors need an action, not repeated network retries. Keep the
+    // preflight session so the same button can be used after space is restored.
+    if (state.retryable === false) throw new Error(state.message || message);
     message = state.message || message;
     if (Date.now() >= deadline) break;
     await new Promise(resolve => setTimeout(resolve, interval));

@@ -337,8 +337,11 @@ def _sync_hub(sids=None, control=False):
             elif not control and item['status'] == 'active' and item['data'].get('platform') == 'moodle':
                 reconcile_moodle(item)
         except Exception as exc:
+            status_code = exc.response.status_code if isinstance(exc, httpx.HTTPStatusError) else None
             store.set_setting(
-                "hub_status", {"ok": False, "error": str(exc), "last_sync": utc()}
+                "hub_status", {"ok": False, "error": str(exc), "last_sync": utc(),
+                               "http_status": status_code,
+                               "code": "hub_storage_low" if status_code == 507 else "hub_unavailable"}
             )
             return False
 
@@ -940,6 +943,12 @@ def moodle_ready(sid: str):
     item = store.session(sid)
     if not item or item['status'] not in ('preflight','active') or item['data'].get('platform') != 'moodle':
         raise HTTPException(409, 'Белсенді Moodle емтиханы қажет')
+    from .storage_budget import require_space
+    try:
+        require_space(DATA)
+    except OSError:
+        return {'ready': False, 'retryable': False, 'code': 'local_storage_low',
+                'message': 'Осы компьютердің дискісінде бос орын жеткіліксіз. Бос орын ашып, қайта басыңыз.'}
     if item['status'] == 'preflight':
         if item['data']['policy'].get('camera_required') and not engine.status().get('identity_enrolled'):
             raise HTTPException(409, 'Фотоға түсіңіз')
@@ -948,8 +957,13 @@ def moodle_ready(sid: str):
     nonce = item['data'].get('moodle', {}).get('nonce')
     if not config.get('enabled') or not config.get('url') or not nonce:
         raise HTTPException(409, 'Moodle мен Sergек хабының байланысын әкімші баптауы қажет')
+    previous_sync = store.setting('hub_status', {})
     synced = sync_hub([sid], control=True)
     if synced is False:
+        failed_sync = store.setting('hub_status', {})
+        if failed_sync != previous_sync and failed_sync.get('code') == 'hub_storage_low':
+            return {'ready': False, 'retryable': False, 'code': 'hub_storage_low',
+                    'message': 'Sergек хабының дискісінде бос орын жеткіліксіз. Әкімшіге хабарласыңыз.'}
         return {'ready': False, 'message': 'Moodle байланысы қалпына келуде'}
     try:
         state = store.setting('hub_lease:'+sid,{})

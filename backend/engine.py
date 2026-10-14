@@ -203,7 +203,10 @@ class Engine:
             with self.lock:
                 if self.latest_frame is None or self.frame_serial == serial:
                     continue
-                frame = self.latest_frame.copy()
+                # Capture publishes a new owned frame each time. Keep that
+                # reference; Vision draws only on its own annotated copy.
+                # Avoid an extra full-resolution allocation outside try/except.
+                frame = self.latest_frame
                 serial = self.frame_serial
             if not self.vision or not self.vision.ready:
                 continue

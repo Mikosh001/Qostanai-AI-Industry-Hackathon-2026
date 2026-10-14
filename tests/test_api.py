@@ -541,6 +541,58 @@ def test_moodle_start_waits_for_matching_active_hub_session(client, monkeypatch)
     assert 'қалпына келуде' in result.json()['message']
 
 
+def storage_ready_session(client):
+    value = create(client)
+    sid = value['session']['id']
+    module.store.update_session(sid, patch={'platform': 'moodle', 'moodle': {'nonce': 'storage-regression'}})
+    module.store.set_setting('hub', {'enabled': True, 'url': 'https://localhost:9443', 'pairing_key': 'h'*40})
+    return value, sid, f'/api/student/{sid}/moodle-ready'
+
+
+def test_local_disk_refusal_keeps_preflight_and_retries_after_recovery(client, monkeypatch):
+    import backend.storage_budget as budget
+    value, sid, route = storage_ready_session(client)
+    def full(*args, **kw):
+        raise OSError('internal path must stay private')
+    monkeypatch.setattr(budget, 'require_space', full)
+    monkeypatch.setattr(module, 'sync_hub', lambda *a, **kw: pytest.fail('Do not sync or activate when local capacity is missing'))
+    refused = client.post(route, headers=headers(value), json={}).json()
+    assert refused['code'] == 'local_storage_low' and refused['retryable'] is False
+    assert 'internal path' not in refused['message']
+    item = module.store.session(sid)
+    assert item['status'] == 'preflight' and item['started'] is None and not item['data'].get('moodle_prepared')
+    monkeypatch.setattr(budget, 'require_space', lambda *a, **kw: None)
+    def prepared(*args, **kw):
+        module.store.set_setting('hub_lease:'+sid, {'prepared': True, 'session_id': sid, 'mode': item['data']['mode']})
+    monkeypatch.setattr(module, 'sync_hub', prepared)
+    assert client.post(route, headers=headers(value), json={}).json()['ready'] is True
+    assert module.store.session(sid)['started'] is None
+
+
+def test_hub_disk_refusal_has_actionable_reason_without_marking_exam_started(client, monkeypatch):
+    import backend.storage_budget as budget
+    monkeypatch.setattr(budget, 'require_space', lambda *a, **kw: None)
+    value, sid, route = storage_ready_session(client)
+    def refuse(method, url, **kw):
+        return httpx.Response(507, json={'detail': 'private-server-path'}, request=httpx.Request(method, url))
+    monkeypatch.setattr(module, 'local_request', refuse)
+    result = client.post(route, headers=headers(value), json={}).json()
+    assert result['code'] == 'hub_storage_low' and result['retryable'] is False
+    assert 'private-server-path' not in result['message'] and 'қалпына келуде' not in result['message']
+    assert module.store.setting('hub_status')['http_status'] == 507
+    assert module.store.session(sid)['status'] == 'preflight' and module.store.session(sid)['started'] is None
+
+
+def test_busy_sync_does_not_reuse_a_historical_disk_failure(client, monkeypatch):
+    import backend.storage_budget as budget
+    monkeypatch.setattr(budget, 'require_space', lambda *a, **kw: None)
+    value, sid, route = storage_ready_session(client)
+    module.store.set_setting('hub_status', {'code': 'hub_storage_low', 'last_sync': 'old'})
+    monkeypatch.setattr(module, 'sync_hub', lambda *a, **kw: False)
+    result = client.post(route, headers=headers(value), json={}).json()
+    assert result['ready'] is False and result.get('retryable') is not False
+
+
 def test_photo_starts_without_gestures_even_with_legacy_session_policy(client, monkeypatch):
     p=client.get('/api/profile').json();p['policy']['camera_required']=True
     client.put('/api/profile',json=p)

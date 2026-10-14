@@ -124,15 +124,62 @@ def test_ten_capture_restarts_release_workers_and_clear_prior_buffers(monkeypatc
     try:
         for i in range(10):
             sid=store.create_session({'student':str(i),'exam':'Restart stress'})['id']
+            previous_serial=engine.frame_serial
             engine.start_camera(sid,0,Policy(screen_recording=False,microphone_required=False))
             assert not engine.audio_frames and not engine.screen_frames
-            time.sleep(.3)
+            deadline=time.monotonic()+2
+            while engine.frame_serial-previous_serial<=5 and time.monotonic()<deadline:
+                time.sleep(.02)
             workers=[engine.thread,engine.analysis_thread]
-            assert engine.frame_serial>5
+            assert engine.frame_serial-previous_serial>5
             engine.stop_camera()
             assert all(not thread.is_alive() for thread in workers)
             assert not engine.pending and not engine.writes and engine.sid is None
     finally:engine.stop_camera();engine.writer.shutdown()
+
+
+def test_analysis_worker_recovers_from_allocation_failure_without_extra_frame_copy(monkeypatch, tmp_path):
+    monkeypatch.setattr(Engine, '_load', lambda self: setattr(self, 'loading', False))
+    store = Store(tmp_path/'memory.sqlite')
+    engine = Engine(store, Path('models'), tmp_path, bytes(32))
+    failed = threading.Event()
+    events = []
+    class Frame:
+        def copy(self):
+            raise MemoryError('Redundant full-frame allocation')
+    first, second = Frame(), Frame()
+    class Vision:
+        ready = True
+        def analyze(self, frame):
+            if frame is first:
+                failed.set()
+                raise MemoryError('Transient inference allocation failure')
+            assert frame is second
+            engine.stop_event.set()
+            return {'faces': 1, 'quality': 'good'}, frame
+    engine.vision = Vision()
+    engine.policy = Policy()
+    engine.latest_frame = first
+    engine.frame_serial = 1
+    monkeypatch.setattr(engine, 'record', lambda kind, detail: events.append(kind))
+    worker = threading.Thread(target=engine._analyze_loop)
+    try:
+        worker.start()
+        engine.analysis_wakeup.set()
+        assert failed.wait(2)
+        with engine.lock:
+            engine.latest_frame = second
+            engine.frame_serial = 2
+        engine.analysis_wakeup.set()
+        worker.join(2)
+        assert not worker.is_alive() and engine.signals['faces'] == 1
+        assert events == ['camera_pipeline_error']
+    finally:
+        engine.stop_event.set()
+        engine.analysis_wakeup.set()
+        worker.join(3)
+        engine.writer.shutdown()
+        store.db.close()
 
 
 def test_final_evidence_disk_failure_releases_session_and_records_incompleteness(monkeypatch, tmp_path):

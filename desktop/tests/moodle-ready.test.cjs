@@ -38,3 +38,10 @@ test('Authentication failures are reported immediately', async () => {
     probe:async()=>{calls++;const e=new Error('Unauthorized');e.status=401;throw e;}}),/Unauthorized/);
   assert.equal(calls,1);
 });
+
+test('A storage refusal is shown immediately without a misleading connection retry', async () => {
+  let calls=0;
+  await assert.rejects(waitForMoodle({alive:()=>true,timeout:10000,
+    probe:async()=>{calls++;return {ready:false,retryable:false,message:'Disk reserve required'};}}),/^Error: Disk reserve required$/);
+  assert.equal(calls,1);
+});
