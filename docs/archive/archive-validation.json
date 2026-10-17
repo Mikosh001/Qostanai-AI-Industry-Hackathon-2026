@@ -1,0 +1,21 @@
+{
+  "date": "2026-10-17",
+  "backend_tests": 249,
+  "desktop_tests": 66,
+  "all_passed": true,
+  "model_hashes_verified": [
+    "MiniFASNetV2.onnx",
+    "MiniFASNetV1SE.onnx",
+    "silero_vad.onnx",
+    "yolo11n.onnx",
+    "yolo11s.onnx",
+    "face_landmarker.task",
+    "face_detector.tflite",
+    "face_detection_yunet.onnx",
+    "face_recognition_sface.onnx"
+  ],
+  "windows_resource_files_verified": 1185,
+  "public_source_files": 258,
+  "personal_runtime_data_included": false,
+  "restoration": "docs/RESTORE-AFTER-HACKATHON.md"
+}

@@ -47,39 +47,30 @@ def test_signed_launch_expiry_and_tampering():
 
 
 def test_temporal_rules_are_duration_based_and_deduplicate():
-    rules = TemporalRules()
-    policy = Policy(phone_seconds=1)
-    signals = {"phone": True, "faces": 1, "quality": "good", "gaze": "center"}
-    assert rules.update(signals, policy, 0) == []
-    assert rules.update(signals, policy, 0.5) == []
-    events = rules.update(signals, policy, 1.2)
-    assert events[0][0] == "phone_detected"
-    assert rules.update(signals, policy, 1.8) == []
-    rules.update({**signals, "phone": False}, policy, 2)
-    assert rules.update(signals, policy, 2.1) == []  # Brief dropout does not duplicate a phone.
-    assert rules.update(signals, policy, 3.2) == []
-    rules.update({**signals, "phone": False}, policy, 3.3)
-    rules.update({**signals, "phone": False}, policy, 4.4)
-    assert rules.update(signals, policy, 4.5) == []
-    assert rules.update(signals, policy, 5.0) == []
-    assert rules.update(signals, policy, 5.6)[0][0] == "phone_detected"
+    rules=TemporalRules();policy=Policy()
+    def signal(t,phone=True):return {"phone":phone,"phone_confidence":.9,"phone_sample_at":t,"faces":1,"quality":"good","gaze":"center"}
+    assert rules.update(signal(0),policy,0)[0][1]['points']==5
+    for t in [.5,1,1.5]:assert not rules.update(signal(t),policy,t)
+    assert rules.update(signal(2),policy,2)[0][1]['points']==10
+    assert not rules.update(signal(2.5),policy,2.5)
+    rules.update(signal(2.6,False),policy,2.6)
+    assert not rules.update(signal(2.7),policy,2.7)
+    rules.update(signal(3,False),policy,3)
+    rules.update(signal(5.0,False),policy,5.0)
+    assert rules.update(signal(5.1),policy,5.1)[0][1]['points']==5
 
 
 def test_phone_cached_detection_is_not_independent_evidence_and_brief_miss_survives():
-    rules = TemporalRules(); policy = Policy(phone_seconds=2)
-    signal = {"phone":True,"faces":1,"quality":"good","phone_sample_at":1}
-    for stamp in [0, .4, .8, 1.2, 1.6, 2.0]:
-        assert not rules.update(signal,policy,stamp)
-    assert not rules.update({**signal,"phone_sample_at":2},policy,2.1)
-    assert rules.update({**signal,"phone_sample_at":3},policy,2.6)[0][0] == 'phone_detected'
-    rules = TemporalRules()
-    for stamp,phone in [(0,True),(.5,True),(1,False),(1.1,True),(1.6,True)]:
-        assert not rules.update({**signal,"phone":phone,"phone_sample_at":stamp},policy,stamp)
-    assert rules.update({**signal,"phone_sample_at":2.1},policy,2.1)[0][0] == 'phone_detected'
-    rules = TemporalRules()
-    for stamp,phone in [(0,True),(.9,True),(1.8,False)]:
-        assert not rules.update({**signal,"phone":phone,"phone_sample_at":stamp},policy,stamp)
-    assert rules.update({**signal,"phone_sample_at":2.7},policy,2.7)[0][0] == 'phone_detected'
+    rules=TemporalRules();policy=Policy()
+    signal={"phone":True,"phone_confidence":.9,"faces":1,"quality":"good","phone_sample_at":1}
+    first=rules.update(signal,policy,0)
+    assert first[0][1]['points']==5
+    for t in [.4,.8,1.2,1.6,2]:assert not rules.update(signal,policy,t)
+    assert not rules.update({**signal,'phone_sample_at':2},policy,2.1)
+    assert rules.update({**signal,'phone_sample_at':3},policy,2.6)[0][1]['points']==10
+    assert not rules.update({**signal,'phone':False,'phone_sample_at':4},policy,2.7)
+    assert not rules.update({**signal,'phone_sample_at':5},policy,2.8)
+    assert rules.active['phone_detected']['episode_id']==first[0][1]['episode_id']
 
 
 def test_camera_gap_does_not_inflate_duration_or_accuse_paper_use():

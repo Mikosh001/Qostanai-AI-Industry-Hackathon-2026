@@ -17,7 +17,7 @@ class Policy(BaseModel):
     sound_seconds: float = Field(4, ge=3, le=15)
     noise_threshold_dbfs: float = Field(-12, ge=-30, le=-3)
     identity_threshold: float = Field(0.363, ge=0.1, le=0.9)
-    identity_seconds: float = Field(2.5, ge=1, le=15)
+    identity_seconds: float = Field(3.0, ge=1, le=15)
     screen_recording: bool = True
     close_applications: bool = True
     remote_block: bool = True
@@ -28,10 +28,12 @@ class Policy(BaseModel):
     paper_allowed: bool = False
     copy_paste: bool = False
     phone_confidence: float = Field(0.30, ge=0.25, le=0.95)
+    # Kept for compatibility with saved/signed policies. Duration-v2 observation
+    # stages are authoritative in observation_scoring.TIERS, shown in the UI.
     phone_seconds: float = Field(2.0, ge=0.2, le=30)
-    gaze_seconds: float = Field(8.0, ge=1, le=60)
+    gaze_seconds: float = Field(5.0, ge=1, le=60)
     absence_seconds: float = Field(3.0, ge=1, le=60)
-    multi_face_seconds: float = Field(1.5, ge=0.2, le=30)
+    multi_face_seconds: float = Field(3.0, ge=0.2, le=30)
     retention_days: int = Field(14, ge=1, le=365)
     forbidden_processes: list[str] = Field(
         default_factory=lambda: [

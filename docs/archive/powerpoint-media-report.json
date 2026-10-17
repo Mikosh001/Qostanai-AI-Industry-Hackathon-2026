@@ -1,0 +1,36 @@
+[
+  {
+    "language": "RU",
+    "slides": 10,
+    "media": [
+      {
+        "name": "Sergек demo video",
+        "mediaType": 3,
+        "durationMs": 40000,
+        "width": null,
+        "height": null,
+        "frameRate": 60,
+        "videoFormat": null,
+        "embedded": true
+      }
+    ],
+    "passed": true
+  },
+  {
+    "language": "KK",
+    "slides": 10,
+    "media": [
+      {
+        "name": "Sergек demo video",
+        "mediaType": 3,
+        "durationMs": 40000,
+        "width": null,
+        "height": null,
+        "frameRate": 60,
+        "videoFormat": null,
+        "embedded": true
+      }
+    ],
+    "passed": true
+  }
+]

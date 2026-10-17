@@ -43,7 +43,8 @@ def evaluate(manifest,models):
                 if not ignore:
                     tp+=positive and detected;fn+=positive and not detected;fp+=not positive and detected;tn+=not positive and not detected
                     if not positive:negative_seconds+=min(.5,duration-stamp)
-                emitted=rules.update_phone({'phone':detected,'phone_sample_at':stamp,'phones':phones},Policy(),stamp)
+                emitted=rules.update_phone({'phone':detected,'phone_sample_at':stamp,'phones':phones,
+                    'phone_confidence':max((p['confidence'] for p in phones),default=0)},Policy(),stamp)
                 if emitted:
                     flags.append(stamp)
                     if not positive and not ignore:false_events+=1

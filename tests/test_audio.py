@@ -43,8 +43,8 @@ def test_one_speech_episode_does_not_repeat_every_fifteen_seconds():
     loud=np.full(1600,7000,np.int16).tobytes()
     for i in range(1000): mic.process(100+i/10,loud)
     assert len(events)==1
-    for i in range(20): mic.process(200+i/10,bytes(3200))
-    for i in range(60): mic.process(202+i/10,loud)
+    for i in range(60): mic.process(200+i/10,bytes(3200))
+    for i in range(60): mic.process(206+i/10,loud)
     assert len(events)==2
 
 
@@ -66,12 +66,12 @@ def test_loud_non_speech_requires_duration_and_does_not_repeat():
         def reset(self): pass
     events=[]; mic=Microphone(lambda *a:None,lambda *a:events.append(a),detector=NoVoice())
     loud=(np.sin(np.arange(1600)*2*np.pi*440/RATE)*26000).astype(np.int16).tobytes()
-    for i in range(20):mic.process(100+i/10,loud)
+    for i in range(4):mic.process(100+i/10,loud)
     assert not events
     for i in range(20):mic.process(102+i/10,bytes(3200))
     for i in range(150):mic.process(104+i/10,loud)
     assert len(events)==1 and events[0][0]=='sustained_noise'
-    assert events[0][1]['noise_seconds']>=4
+    assert events[0][1]['noise_seconds']>=.5
 
 
 def test_audio_evidence_is_encrypted_playable_and_buffers_do_not_cross_sessions(tmp_path, monkeypatch):

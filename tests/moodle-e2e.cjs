@@ -14,8 +14,8 @@ const fs = require("node:fs");
   const context = await browser.newContext({ ignoreHTTPSErrors: true });
   const page = await context.newPage();
   let app;
-  const loginTrace=[];
-  const lifecycle=[];
+  const loginTrace = [];
+  const lifecycle = [];
   try {
     page.setDefaultTimeout(30000);
     await page.goto("https://localhost/login/index.php");
@@ -57,8 +57,22 @@ const fs = require("node:fs");
       },
       timeout: 90000,
     });
-    app.context().on('close',()=>lifecycle.push({event:'context_closed',at:Date.now()}));
-    app.context().on('page',p=>p.on('close',()=>lifecycle.push({event:'page_closed',path:new URL(p.url()).pathname,at:Date.now()})));
+    app
+      .context()
+      .on("close", () =>
+        lifecycle.push({ event: "context_closed", at: Date.now() }),
+      );
+    app
+      .context()
+      .on("page", (p) =>
+        p.on("close", () =>
+          lifecycle.push({
+            event: "page_closed",
+            path: new URL(p.url()).pathname,
+            at: Date.now(),
+          }),
+        ),
+      );
     const local = await app.firstWindow();
     local.setDefaultTimeout(25000);
     // firstWindow can be returned while the hidden startup page is still loading.
@@ -108,13 +122,15 @@ const fs = require("node:fs");
           p.policy.camera_required = false;
           p.policy.screen_recording = false;
           p.policy.microphone_required = false;
-          if (software) p.exam_mode='monitor';
+          if (software) p.exam_mode = "monitor";
           p.allowed_hosts = ["localhost"];
           p.moodle_url = "https://localhost/";
           p.platonus_url = "https://localhost/";
           p.tls_pins = { localhost: meta.fingerprint };
           await send("/profile", "PUT", p);
-          await send("/integration/moodle", "PUT", { public_key: creds.moodle_public_key });
+          await send("/integration/moodle", "PUT", {
+            public_key: creds.moodle_public_key,
+          });
           await send("/integration/hub", "PUT", {
             enabled: true,
             url: meta.hub,
@@ -123,7 +139,11 @@ const fs = require("node:fs");
           });
           await send("/auth/logout", "POST");
         },
-        { creds, meta, software: process.env.SERGEK_SOFTWARE_ACCEPTANCE === '1' },
+        {
+          creds,
+          meta,
+          software: process.env.SERGEK_SOFTWARE_ACCEPTANCE === "1",
+        },
       );
     await local.reload();
     await expect(local.getByLabel("Емтихан режимі")).toHaveCount(0);
@@ -141,20 +161,46 @@ const fs = require("node:fs");
       .context()
       .pages()
       .find((p) => p.url().startsWith("https://localhost/"));
-    portal.on('response',async r=>{
+    portal.on("response", async (r) => {
       try {
-        const u=new URL(r.url());if(!u.pathname.endsWith('.php'))return;
-        const hash=v=>require('node:crypto').createHash('sha256').update(v||'').digest('hex').slice(0,8);
-        const sid=((await r.request().allHeaders()).cookie||'').match(/MoodleSession=([^;]+)/)?.[1];
-        const set=(await r.headersArray()).filter(h=>h.name.toLowerCase()==='set-cookie').map(h=>h.value.match(/^MoodleSession=([^;]*)/)?.[1]).filter(v=>v!==undefined);
-        if(set.length||u.pathname.includes('/login/')||u.pathname==='/my/')loginTrace.push({path:u.pathname,method:r.request().method(),status:r.status(),requestSid:hash(sid),setSids:set.map(hash)});
-      }catch{}
+        const u = new URL(r.url());
+        if (!u.pathname.endsWith(".php")) return;
+        const hash = (v) =>
+          require("node:crypto")
+            .createHash("sha256")
+            .update(v || "")
+            .digest("hex")
+            .slice(0, 8);
+        const sid = ((await r.request().allHeaders()).cookie || "").match(
+          /MoodleSession=([^;]+)/,
+        )?.[1];
+        const set = (await r.headersArray())
+          .filter((h) => h.name.toLowerCase() === "set-cookie")
+          .map((h) => h.value.match(/^MoodleSession=([^;]*)/)?.[1])
+          .filter((v) => v !== undefined);
+        if (
+          set.length ||
+          u.pathname.includes("/login/") ||
+          u.pathname === "/my/"
+        )
+          loginTrace.push({
+            path: u.pathname,
+            method: r.request().method(),
+            status: r.status(),
+            requestSid: hash(sid),
+            setSids: set.map(hash),
+          });
+      } catch {}
     });
     await portal.locator("#username").fill(creds.student);
     await portal.locator("#password").fill(creds.studentpass);
     await portal.locator("#loginbtn").click();
-    await expect(portal.locator('a[href*="/login/logout.php"]').first()).toBeAttached();
-    await expect(local.getByText("Moodle: өз логиніңізбен кіріп, тестті таңдаңыз")).toHaveCount(0);
+    await expect(
+      portal.locator('a[href*="/login/logout.php"]').first(),
+    ).toBeAttached();
+    await expect(
+      local.getByText("Moodle: өз логиніңізбен кіріп, тестті таңдаңыз"),
+    ).toHaveCount(0);
     await portal.goto(exam.url).catch((error) => {
       // The selected protected quiz automatically closes its portal during handoff.
       if (!portal.isClosed() && !String(error).includes("ERR_ABORTED"))
@@ -196,15 +242,22 @@ const fs = require("node:fs");
     }
     await local.getByRole("checkbox").check();
     await local.getByRole("button", { name: "Фотоға өту" }).click();
-    await expect(local.getByRole("button", { name: "Тест бетіне өту" })).toBeVisible();
+    await expect(
+      local.getByRole("button", { name: "Тест бетіне өту" }),
+    ).toBeVisible();
     await expect(local.getByLabel("Мұғалім құпиясөзі")).toHaveCount(0);
     const created = await local.evaluate(
       async () => (await window.sergek.invoke("snapshot")).session,
     );
     if (created.data.moodle.userid !== String(exam.studentid))
       throw new Error("Signed identity was not bound");
-    if (process.env.SERGEK_SOFTWARE_ACCEPTANCE === "1" && created.data.mode !== "monitor")
-      throw new Error("Software acceptance requires a signed monitor-only fixture before proceeding");
+    if (
+      process.env.SERGEK_SOFTWARE_ACCEPTANCE === "1" &&
+      created.data.mode !== "monitor"
+    )
+      throw new Error(
+        "Software acceptance requires a signed monitor-only fixture before proceeding",
+      );
     await local.getByRole("button", { name: "Тест бетіне өту" }).click();
     await expect
       .poll(
@@ -228,23 +281,39 @@ const fs = require("node:fs");
     });
     // Regression: the very first protected page must be usable. No manual reload.
     await expect(attemptButton).toBeVisible({ timeout: 30000 });
-    await expect(protectedPage.getByRole("link", { name: "Open Sergek Proctor", exact: true })).toHaveCount(0);
+    await expect(
+      protectedPage.getByRole("link", {
+        name: "Open Sergek Proctor",
+        exact: true,
+      }),
+    ).toHaveCount(0);
     // Playwright can see a hidden WebContentsView's DOM before Electron has
     // awaited protection and exposed that view to the student.
-    await expect.poll(()=>protectedPage.evaluate(() => ({
-      printBlocked: window.print.__sergekBlocked === true,
-      pasteBlocked: !document.dispatchEvent(
-        new Event("paste", { bubbles: true, cancelable: true }),
-      ),
-    })),{timeout:15000}).toEqual({printBlocked:true,pasteBlocked:true});
+    await expect
+      .poll(
+        () =>
+          protectedPage.evaluate(() => ({
+            printBlocked: window.print.__sergekBlocked === true,
+            pasteBlocked: !document.dispatchEvent(
+              new Event("paste", { bubbles: true, cancelable: true }),
+            ),
+          })),
+        { timeout: 15000 },
+      )
+      .toEqual({ printBlocked: true, pasteBlocked: true });
     await protectedPage.evaluate(() => {
       const image = new Image();
       image.src = "https://cdn.jsdelivr.net/sergek-blocked-regression.png";
       window.open("https://example.invalid/sergek-regression", "_blank");
     });
-    const prepared = await local.evaluate(async () => (await window.sergek.invoke("snapshot")).session);
-    if(prepared.status!=="preflight" || prepared.started) throw new Error("Protection started before Moodle Start attempt");
-    await expect(local.getByText('Moodle-де «Start attempt» басыңыз')).toBeVisible();
+    const prepared = await local.evaluate(
+      async () => (await window.sergek.invoke("snapshot")).session,
+    );
+    if (prepared.status !== "preflight" || prepared.started)
+      throw new Error("Protection started before Moodle Start attempt");
+    await expect(
+      local.getByText("Moodle-де «Start attempt» басыңыз"),
+    ).toBeVisible();
     const attemptStartWait = Date.now();
     await attemptButton.click();
     const startAttempt = protectedPage.getByRole("button", {
@@ -260,22 +329,61 @@ const fs = require("node:fs");
       )
       .toBe(true);
     if (await startAttempt.isVisible()) await startAttempt.click();
-    await expect.poll(async () => (await local.evaluate(async () => (await window.sergek.invoke("snapshot")).session)).status).toBe("active");
-    const active = await local.evaluate(async () => (await window.sergek.invoke("snapshot")).session);
-    if(!active.started) throw new Error("Actual start not persisted");
+    await expect
+      .poll(
+        async () =>
+          (
+            await local.evaluate(
+              async () => (await window.sergek.invoke("snapshot")).session,
+            )
+          ).status,
+      )
+      .toBe("active");
+    const active = await local.evaluate(
+      async () => (await window.sergek.invoke("snapshot")).session,
+    );
+    if (!active.started) throw new Error("Actual start not persisted");
     await expect(protectedPage.locator(".que").first()).toBeVisible();
-    await expect.poll(()=>local.evaluate(async()=>(await window.sergek.invoke('info')).examReady)).toBe(true);
+    await expect
+      .poll(() =>
+        local.evaluate(
+          async () => (await window.sergek.invoke("info")).examReady,
+        ),
+      )
+      .toBe(true);
+    await expect(local.locator(".student-feedback.docked")).toBeVisible();
+    const examBounds = await app.evaluate(({ BrowserWindow }) => {
+      const window = BrowserWindow.getAllWindows().find((w) => w.isVisible());
+      return {
+        height: window.getContentBounds().height,
+        views: window.contentView.children.map((view) => view.getBounds()),
+      };
+    });
+    if (
+      !examBounds.views.some(
+        (view) => view.y === 76 && view.height === examBounds.height - 76 - 112,
+      )
+    )
+      throw new Error("The native Moodle view covers student warnings");
     const startupMilliseconds = Date.now() - attemptStartWait;
-    if(startupMilliseconds > 15000) throw new Error("Exam startup exceeded 15 seconds: " + startupMilliseconds);
+    if (startupMilliseconds > 15000)
+      throw new Error(
+        "Exam startup exceeded 15 seconds: " + startupMilliseconds,
+      );
     if (process.env.SERGEK_QUIZ_URL) {
-      const firstPage = new URL(protectedPage.url()); firstPage.searchParams.set("page", "0");
+      const firstPage = new URL(protectedPage.url());
+      firstPage.searchParams.set("page", "0");
       await protectedPage.goto(firstPage.href);
       for (let i = 0; i < 5; i++) {
         const question = protectedPage.locator(".que").first();
         await expect(question).toBeVisible();
-        if(process.env.SERGEK_SLOW_QUIZ === "1") await protectedPage.waitForTimeout(17000);
-        const live = await local.evaluate(async () => (await window.sergek.invoke("snapshot")).session);
-        if(live.status!=="active" || live.started!==active.started) throw new Error("Session lost at question "+(i+1));
+        if (process.env.SERGEK_SLOW_QUIZ === "1")
+          await protectedPage.waitForTimeout(17000);
+        const live = await local.evaluate(
+          async () => (await window.sergek.invoke("snapshot")).session,
+        );
+        if (live.status !== "active" || live.started !== active.started)
+          throw new Error("Session lost at question " + (i + 1));
         const text = await question.innerText();
         const correct = text.includes("Алгоритм")
           ? "Мәселені шешуге арналған реттелген қадамдар"
@@ -326,8 +434,11 @@ const fs = require("node:fs");
     await expect(
       local.getByRole("heading", { name: "Сессия аяқталды" }),
     ).toBeVisible();
-    const completed = await local.evaluate(async () => (await window.sergek.invoke("snapshot")).session);
-    if(!completed.ended || completed.ended<completed.started) throw new Error("Actual end not persisted");
+    const completed = await local.evaluate(
+      async () => (await window.sergek.invoke("snapshot")).session,
+    );
+    if (!completed.ended || completed.ended < completed.started)
+      throw new Error("Actual end not persisted");
     const { execFileSync } = require("node:child_process");
     const python =
       process.env.SERGEK_PYTHON ||
@@ -366,29 +477,34 @@ const fs = require("node:fs");
       )
       .toBeGreaterThan(0);
     const result = {
-        passed: true,
-        moodle: "4.5.15",
-        plugin: "quizaccess_sergek",
-        signedIdentity: true,
-        portalLogin: true,
-        automaticallyOpenedFromSelectedQuiz: true,
-        loginRetainedDuringHandoff: true,
-        noStudentModeOrUrlOrTeacherPassword: true,
-        automaticDemoBootstrap: process.env.SERGEK_DEMO_ACCEPTANCE === "1",
-        automaticallyReleasedAfterMoodleSubmission: true,
-        attemptSubmitted: true,
-        protectionDeferredUntilAttempt: true,
-        startupMilliseconds,
-        persistedStart: completed.started,
-        persistedEnd: completed.ended,
-        slowQuiz: process.env.SERGEK_SLOW_QUIZ === "1",
-        firstProtectedPageUsableWithoutReload: true,
-        serverGating: true,
-        blockedResourcesAndWindowsAuditOnly: true,
-        camera: "disabled administrative software test profile",
-        data,
-      };
-    if(process.env.SERGEK_ACCEPTANCE_OUTPUT) fs.writeFileSync(process.env.SERGEK_ACCEPTANCE_OUTPUT,JSON.stringify(result,null,2));
+      passed: true,
+      moodle: "4.5.15",
+      plugin: "quizaccess_sergek",
+      signedIdentity: true,
+      portalLogin: true,
+      automaticallyOpenedFromSelectedQuiz: true,
+      loginRetainedDuringHandoff: true,
+      noStudentModeOrUrlOrTeacherPassword: true,
+      automaticDemoBootstrap: process.env.SERGEK_DEMO_ACCEPTANCE === "1",
+      automaticallyReleasedAfterMoodleSubmission: true,
+      attemptSubmitted: true,
+      protectionDeferredUntilAttempt: true,
+      studentFeedbackVisibleBelowNativeMoodle: true,
+      startupMilliseconds,
+      persistedStart: completed.started,
+      persistedEnd: completed.ended,
+      slowQuiz: process.env.SERGEK_SLOW_QUIZ === "1",
+      firstProtectedPageUsableWithoutReload: true,
+      serverGating: true,
+      blockedResourcesAndWindowsAuditOnly: true,
+      camera: "disabled administrative software test profile",
+      data,
+    };
+    if (process.env.SERGEK_ACCEPTANCE_OUTPUT)
+      fs.writeFileSync(
+        process.env.SERGEK_ACCEPTANCE_OUTPUT,
+        JSON.stringify(result, null, 2),
+      );
     console.log(JSON.stringify(result));
   } catch (error) {
     for (const p of app?.context().pages() || [])
@@ -408,16 +524,34 @@ const fs = require("node:fs");
         fullPage: true,
       })
       .catch(() => {});
-    console.error("Login cookie trace (hashes only):",JSON.stringify(loginTrace));
-    console.error("Electron lifecycle:",JSON.stringify(lifecycle));
-    console.error("Remaining Electron pages:",JSON.stringify(app?.context().pages().map(p=>({path:new URL(p.url()).pathname,closed:p.isClosed()}))||[]));
+    console.error(
+      "Login cookie trace (hashes only):",
+      JSON.stringify(loginTrace),
+    );
+    console.error("Electron lifecycle:", JSON.stringify(lifecycle));
+    console.error(
+      "Remaining Electron pages:",
+      JSON.stringify(
+        app
+          ?.context()
+          .pages()
+          .map((p) => ({
+            path: new URL(p.url()).pathname,
+            closed: p.isClosed(),
+          })) || [],
+      ),
+    );
     console.error("Moodle test page:", page.url());
     throw error;
   } finally {
     if (app) {
       // Moodle's unsaved-answer beforeunload can cancel app.quit after a failed
       // test. Destroy only this isolated fixture's windows before closing it.
-      await app.evaluate(({BrowserWindow})=>{for(const window of BrowserWindow.getAllWindows())window.destroy()}).catch(()=>{});
+      await app
+        .evaluate(({ BrowserWindow }) => {
+          for (const window of BrowserWindow.getAllWindows()) window.destroy();
+        })
+        .catch(() => {});
       await app.close();
     }
     await browser.close();

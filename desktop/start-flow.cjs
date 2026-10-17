@@ -27,6 +27,7 @@ async function startProtectedExam({
     while (
       strict &&
       (native.unapproved_applications?.length ||
+        native.pending_applications?.length ||
         native.forbidden_processes?.length ||
         native.storage_check_pending) &&
       Date.now() < deadline

@@ -1,6 +1,7 @@
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
 const { startProtectedExam } = require("../start-flow.cjs");
+const { shouldInterruptForGuardFailure } = require("../guard-events.cjs");
 
 function fixture(extra = {}) {
   const calls = [];
@@ -34,6 +35,44 @@ test("One start transaction protects pixels before arming and opens only after b
   const result = await startProtectedExam(f.options);
   assert.equal(result.id, "session");
   assert.deepEqual(f.calls, ["protect", "activate", "probe", "start", "open"]);
+});
+
+test("A slow process exit keeps preparation waiting instead of starting or interrupting", async () => {
+  let probes = 0;
+  const f = fixture({
+    probe: async () => ({
+      available: true,
+      active: true,
+      pending_applications: ++probes < 3 ? [{ pid: 123 }] : [],
+    }),
+    start: async () => {
+      assert.equal(probes, 3);
+      return { id: "same-session" };
+    },
+  });
+  const result = await startProtectedExam(f.options);
+  assert.equal(result.id, "same-session");
+  assert.ok(!f.calls.includes("interrupt"));
+});
+
+test("Native preparation failure releases and can retry the same session; active failure interrupts", async () => {
+  assert.equal(shouldInterruptForGuardFailure({ status: "preflight" }), false);
+  assert.equal(shouldInterruptForGuardFailure({ status: "active" }), true);
+  const f = fixture({
+    probe: async () => ({
+      available: true,
+      active: true,
+      error: "closure could not be confirmed",
+    }),
+  });
+  await assert.rejects(
+    () => startProtectedExam(f.options),
+    /closure could not be confirmed/,
+  );
+  assert.equal(f.calls.at(-1), "release");
+  assert.ok(!f.calls.includes("interrupt"));
+  f.options.probe = async () => ({ available: true, active: true });
+  assert.equal((await startProtectedExam(f.options)).id, "session");
 });
 test("Rejected native activation rolls restrictions back without starting exam", async () => {
   const f = fixture({

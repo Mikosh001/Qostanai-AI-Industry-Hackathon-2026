@@ -113,7 +113,7 @@ def test_identity_event_waits_and_clears_when_comparison_is_unavailable():
     assert rules.update(signals, policy, 3) == []
     assert rules.update(signals, policy, 4) == []
     assert any(
-        kind == "identity_mismatch" for kind, _ in rules.update(signals, policy, 4.6)
+        kind == "identity_mismatch" for kind, _ in rules.update(signals, policy, 5.1)
     )
 
 

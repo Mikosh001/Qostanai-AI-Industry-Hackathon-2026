@@ -11,6 +11,7 @@ ROOT=Path(__file__).resolve().parents[1];sys.path.insert(0,str(ROOT))
 from backend.store import Store
 from backend.security import canonical
 from backend.trust import enroll,issue
+from backend.review_priority import review_summary
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 def stamp():return datetime.now(timezone.utc).isoformat()
@@ -141,7 +142,7 @@ def main():
                 time.sleep(1)
             if any(d.returncode for d in drivers):raise RuntimeError('Load driver failed')
             results=[json.loads((data/f'driver-{i}.json').read_text()) for i in range(args.workers)]
-            report={'date':'2026-10-12','scope':__doc__,'students':args.students,'duration_per_client_seconds':args.duration,
+            report={'date':datetime.now(timezone.utc).date().isoformat(),'scope':__doc__,'students':args.students,'duration_per_client_seconds':args.duration,
               'elapsed_seconds':round(time.perf_counter()-began,2),'drivers':args.workers,'initial_events_per_session':args.events,
               'lease_period_seconds':args.period,'ramp_seconds':args.ramp,'errors':[e for r in results for e in r['errors']],
               'synthetic_evidence_bytes_per_30_seconds':args.evidence_bytes,
@@ -156,7 +157,13 @@ def main():
             verify=Store(data/'sergek.db')
             report['persisted_completed']=verify.db.execute("SELECT count(*) FROM sessions WHERE status='completed' AND started IS NOT NULL AND ended IS NOT NULL").fetchone()[0]
             report['integrity_failures']=sum(not verify.integrity(s['id']) for s in verify.sessions());verify.db.close()
-            report['passed']=not report['errors'] and report['stale']==0 and report['completed']==args.students and report['persisted_completed']==args.students and report['integrity_failures']==0 and report['latency_ms']['lease'].get('p95',float('inf'))<=2000
+            verify=Store(data/'sergek.db')
+            sessions=verify.sessions(sort='priority')
+            summaries=verify.review_summaries([s['id'] for s in sessions])
+            report['review_metrics_failures']=sum(summaries[s['id']]!=review_summary(verify.events(s['id'])) for s in sessions)
+            report['review_queue_sessions']=len(summaries)
+            verify.db.close()
+            report['passed']=not report['errors'] and report['stale']==0 and report['completed']==args.students and report['persisted_completed']==args.students and report['integrity_failures']==0 and report['review_metrics_failures']==0 and report['review_queue_sessions']==args.students and report['latency_ms']['lease'].get('p95',float('inf'))<=2000
             args.output.parent.mkdir(parents=True,exist_ok=True);args.output.write_text(json.dumps(report,indent=2));print(json.dumps({**report,'errors':{'count':len(report['errors']),'first':report['errors'][:5]}}))
         finally:
             for driver in drivers:

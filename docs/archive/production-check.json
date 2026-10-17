@@ -1,0 +1,39 @@
+{
+  "checks": [
+    {
+      "page": "START.html",
+      "duration": 40,
+      "time": 1.021682,
+      "error": null
+    },
+    {
+      "page": "PRESENTATION-RU.html#4",
+      "duration": 40,
+      "time": 1.022116,
+      "error": null
+    },
+    {
+      "page": "PRESENTATION-KK.html#4",
+      "duration": 40,
+      "time": 1.016255,
+      "error": null
+    },
+    {
+      "file": "assets/Sergek-Demo.mp4",
+      "sha256": "e730504d95e3cde7c236c8a03175e8125e1878892baa2c58cd4607dae2b23cd0",
+      "identical": true
+    },
+    {
+      "file": "Sergek-Final-RU-Video.pptx",
+      "sha256": "6011f81f563e51da86cd995c832b4017f1770bd3aed5660a8ada8efeb353bd95",
+      "identical": true
+    },
+    {
+      "file": "Sergek-Final-KK-Video.pptx",
+      "sha256": "194041dc794fb163483e7e96574a7b6636fc469330b0312f10473436726eb183",
+      "identical": true
+    }
+  ],
+  "errors": [],
+  "passed": true
+}

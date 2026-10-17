@@ -8,6 +8,7 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.Win32;
 using System.ComponentModel;
+using System.Collections.Concurrent;
 
 internal static partial class Program {
     static volatile bool CloseApplications, RemoteEnforced;
@@ -26,6 +27,41 @@ internal static partial class Program {
     static long LastParentUpdate,LastApplicationScan,LastRemoteCheck;
     static int LastForeground;
     static int ExamOwnerPid;
+    record PendingApplicationClose(int Pid,string Name,string Title,long Requested,long Started,nint[] Windows,string? Picture);
+    static readonly ConcurrentDictionary<int,PendingApplicationClose> PendingApplicationClosures=new();
+    static object[] PendingApplications() => PendingApplicationClosures.Values.Select(p=>(object)new{pid=p.Pid,name=p.Name}).ToArray();
+    static string ApplicationClosureDecision(bool exited,long elapsed) => exited?"closed":elapsed<3000?"pending":"failed";
+    static void VerifyPendingApplicationClosures() {
+        foreach(var pending in PendingApplicationClosures.Values) {
+            bool exited=false;string? error=null;
+            try {
+                using var process=Process.GetProcessById(pending.Pid);
+                exited=process.HasExited||pending.Started!=0&&process.StartTime.ToUniversalTime().Ticks!=pending.Started;
+            } catch(ArgumentException){exited=true;}
+            catch(InvalidOperationException){exited=true;}
+            catch(Exception ex){error=ex.Message;}
+            var elapsed=Environment.TickCount64-pending.Requested;
+            var decision=ApplicationClosureDecision(exited,elapsed);
+            if(decision=="pending"||!PendingApplicationClosures.TryRemove(pending.Pid,out _))continue;
+            if(decision=="failed") {
+                RestorePendingWindows(pending);
+                LastError="Бөгде бағдарламаның жабылуы расталмады: "+pending.Name;
+            }
+            Emit(new{type="event",kind=decision=="closed"?"application_closed":"application_close_failed",
+                detail=new{pid=pending.Pid,name=pending.Name,title=pending.Title,blocked=decision=="closed",
+                    reason=decision=="closed"?"exit_confirmed":"exit_not_confirmed",duration_ms=elapsed,error,screen_jpeg=pending.Picture}});
+        }
+    }
+    static void RestorePendingWindows(PendingApplicationClose pending) {
+        foreach(var target in pending.Windows) {
+            if(!Native.IsWindow(target))continue;
+            Native.GetWindowThreadProcessId(target,out var owner);
+            if(owner==pending.Pid)Native.ShowWindowAsync(target,5);
+        }
+    }
+    static void ClearPendingApplicationClosures() {
+        foreach(var pending in PendingApplicationClosures.Values)if(PendingApplicationClosures.TryRemove(pending.Pid,out _))RestorePendingWindows(pending);
+    }
     static readonly Queue<int> ApplicationScan = new();
     static readonly HashSet<string> Critical=new(StringComparer.OrdinalIgnoreCase){
         "System","Registry","smss","csrss","wininit","services","lsass","winlogon","dwm",
@@ -89,6 +125,7 @@ internal static partial class Program {
         try {
           lock(RestrictionSync) {
             if(!Active)return;
+            VerifyPendingApplicationClosures();
             VerifyGestures();if(!Active)return;
             if(CloseApplications&&!InputDesktopAvailable()) {
                 Emit(new{type="event",kind="protected_desktop_left",detail=new{reason="input_desktop_changed",blocked=false}});Release();return;
@@ -202,6 +239,7 @@ internal static partial class Program {
         } catch(InvalidOperationException) {return;}
         var name=processName+".exe";
         if(Trusted(pid))return;
+        if(PendingApplicationClosures.ContainsKey(pid))return;
         // A parent editor can own a kill-on-close Job containing the exam. Never
         // kill that parent: reject readiness and recover restrictions instead.
         // Explorer folder windows are handled below without terminating its process.
@@ -224,11 +262,17 @@ internal static partial class Program {
         var processPicture=visible&&capture?ScreenImage():null;
         var hidden=visible?ApplicationWindows(pid,processName):new List<nint>();
         try {
+            long started=0;try{started=process.StartTime.ToUniversalTime().Ticks;}catch{}
+            var pending=new PendingApplicationClose(pid,name,title,Environment.TickCount64,started,hidden.ToArray(),processPicture);
+            if(!PendingApplicationClosures.TryAdd(pid,pending))return;
             foreach(var target in hidden)Native.ShowWindowAsync(target,0);
             process.Kill();
-            bool closed=process.WaitForExit(700);
-            Emit(new{type="event",kind=closed?"application_closed":"application_close_failed",detail=new{pid,name,title,blocked=closed,screen_jpeg=processPicture}});
+            // Never hold the lease/IPC lock while waiting for Windows process teardown.
+            // A successful termination request may need more than 700 ms to finish.
+            VerifyPendingApplicationClosures();
         } catch(Exception ex) {
+            PendingApplicationClosures.TryRemove(pid,out _);
+            try{if(process.HasExited){Emit(new{type="event",kind="application_closed",detail=new{pid,name,title,blocked=true,reason="exited_during_close"}});return;}}catch{}
             foreach(var target in hidden)if(Native.IsWindow(target))Native.ShowWindowAsync(target,5);
             Emit(new{type="event",kind="application_close_failed",detail=new{pid,name,title,blocked=false,error=ex.Message,screen_jpeg=processPicture}});
         }

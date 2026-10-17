@@ -78,7 +78,9 @@ class Vision:
 
     def phones(self, frame):
         now = time.monotonic()
-        if self.phone_sample_at and now - self.phone_sample_at < 0.5:
+        # Follow a possible phone sooner. Repeated cache reads are still one sample.
+        interval=0.25 if self.phone_cache else 0.4
+        if self.phone_sample_at and now - self.phone_sample_at < interval:
             return self.phone_cache
         height, width = frame.shape[:2]
         # The training scale and the detail scale complement each other: a
@@ -345,84 +347,106 @@ class TemporalRules:
     def __init__(self):
         self.active = {}
         self.last_frame = None
+        self.episode_counter = 0
+
+    def _new(self, key, kind, stamp):
+        self.episode_counter += 1
+        item = {"start":stamp,"last_positive":stamp,"emitted":False,"points":0,
+                "kind":kind,"episode_id":f'{key}-{self.episode_counter}'}
+        self.active[key]=item
+        return item
+
+    def _condition(self, key, kind, condition, stamp):
+        item=self.active.get(key)
+        grace=1.8 if key=='phone_detected' else 1.0
+        if not condition:
+            if item:
+                item.setdefault('clear_since',stamp)
+                if not item['emitted'] or stamp-item['clear_since']>=grace:
+                    self.active.pop(key,None)
+            return None
+        if item and 'clear_since' in item:
+            pause=stamp-item['clear_since']
+            if pause>=grace:
+                self.active.pop(key,None);item=None
+            else:
+                item['start']+=pause
+                if 'confirmed_start' in item:item['confirmed_start']+=pause
+                item.pop('clear_since')
+        if item is None:item=self._new(key,kind,stamp)
+        item.update(kind=kind,last_positive=stamp)
+        return item
+
+    def _emit(self, item, kind, duration, signals, points, threshold):
+        from .observation_scoring import SCALE
+        previous=item['points'];item.update(points=points,emitted=True)
+        return kind,{'duration_seconds':round(duration,6),'threshold_seconds':threshold,
+            'episode_id':item['episode_id'],'scoring_scale':SCALE,'points':points,
+            'previous_points':previous,'points_delta':points-previous,'signals':signals}
 
     def update(self, signals, policy, stamp):
-        if self.last_frame is not None and stamp - self.last_frame > 2:
-            self.active.clear()
-        self.last_frame = stamp
-        mapping = {
-            "face_absent": (
-                signals.get("faces", 0) == 0 and signals.get("quality") == "good",
-                policy.absence_seconds,
-            ),
-            "multiple_faces": (signals.get("faces", 0) > 1, policy.multi_face_seconds),
-            "identity_mismatch": (
-                signals.get("identity", {}).get("state") == "mismatch",
-                policy.identity_seconds,
-            ),
-            "gaze_down": (
-                signals.get("gaze") == "down" and not policy.paper_allowed
-                and signals.get("faces") == 1 and signals.get("quality") == "good"
-                and signals.get("confidence", 0) >= 0.75,
-                policy.gaze_seconds,
-            ),
-            "gaze_side": (
-                signals.get("gaze") in ("left", "right", "away")
-                and signals.get("faces") == 1 and signals.get("quality") == "good"
-                and signals.get("confidence", 0) >= 0.75,
-                policy.gaze_seconds,
-            ),
-            "camera_obscured": (signals.get("quality") in ("dark", "blur"), 3.0),
-            "presentation_attack": (signals.get('faces') == 1 and signals.get('presentation',{}).get('state') == 'spoof', 6.0),
-        }
-        events = self.update_phone(signals, policy, stamp)
-        for kind, (condition, threshold) in mapping.items():
-            if not condition:
-                item = self.active.get(kind)
-                if item and item["emitted"]:
-                    item.setdefault("clear_since", stamp)
-                    if stamp - item["clear_since"] >= 1:
-                        self.active.pop(kind, None)
-                else:
-                    self.active.pop(kind, None)
-                continue
-            item = self.active.setdefault(kind, {"start": stamp, "emitted": False})
-            item.pop("clear_since", None)
-            if stamp - item["start"] >= threshold and not item["emitted"]:
-                item["emitted"] = True
-                events.append(
-                    (
-                        kind,
-                        {
-                            "duration_seconds": round(stamp - item["start"], 2),
-                            "signals": signals,
-                            "threshold_seconds": threshold,
-                        },
-                    )
-                )
+        from .observation_scoring import duration_points,TIERS,family,OTHER_WEIGHTS
+        if self.last_frame is not None and stamp-self.last_frame>2:self.active.clear()
+        self.last_frame=stamp
+        faces=signals.get('faces',0);good=signals.get('quality')=='good'
+        mismatch=faces==1 and good and signals.get('identity',{}).get('state')=='mismatch'
+        gaze=signals.get('gaze')
+        gaze_valid=faces==1 and good and not mismatch and signals.get('confidence',0)>=.75
+        looking_away=gaze_valid and (gaze in ('left','right','away') or gaze=='down' and not policy.paper_allowed)
+        mapping=[
+            ('face_absent','face_absent',faces==0 and good,policy.absence_seconds),
+            ('multiple_faces','multiple_faces',faces>1 and good,3),
+            ('identity_mismatch','identity_mismatch',mismatch,3),
+            ('gaze','gaze_down' if gaze=='down' else 'gaze_side',looking_away,5),
+            ('camera_obscured','camera_obscured',signals.get('quality') in ('dark','blur'),3),
+            ('presentation_attack','presentation_attack',faces==1 and good and signals.get('presentation',{}).get('state')=='spoof',6),
+        ]
+        events=self.update_phone(signals,policy,stamp)
+        for key,kind,condition,threshold in mapping:
+            item=self._condition(key,kind,condition,stamp)
+            if not item:continue
+            duration=stamp-item['start']
+            if family(kind) in TIERS:
+                points=duration_points(kind,duration)
+                if points>item['points']:
+                    events.append(self._emit(item,kind,duration,signals,points,
+                        max(t for t,p in TIERS[family(kind)] if p<=points)))
+            elif duration>=threshold and not item['emitted']:
+                events.append(self._emit(item,kind,duration,signals,OTHER_WEIGHTS.get(kind,10),threshold))
         return events
 
     def update_phone(self, signals, policy, stamp):
-        sample = signals.get("phone_sample_at", stamp)
-        item = self.active.get("phone_detected")
-        if item and sample == item.get("sample"):
-            return []  # Cached detections cannot become extra independent evidence.
-        if not signals.get("phone", False):
-            if item:
-                item["sample"] = sample
-                item.setdefault("clear_since", stamp)
-                grace = 1.0 if item['emitted'] else 1.8
-                if stamp - item["last_positive"] >= grace:
-                    self.active.pop("phone_detected", None)
-            return []
-        if item is None:
-            item = {"start": stamp, "last_positive": stamp, "samples": 0, "emitted": False}
-            self.active["phone_detected"] = item
-        item.update(sample=sample, last_positive=stamp, samples=item["samples"] + 1)
-        item.pop("clear_since", None)
-        if stamp - item["start"] >= policy.phone_seconds and item["samples"] >= 3 and not item["emitted"]:
-            item["emitted"] = True
-            return [("phone_detected", {"duration_seconds": round(stamp - item["start"], 2),
-                     "threshold_seconds": policy.phone_seconds, "independent_samples": item["samples"],
-                     "signals": signals})]
-        return []
+        from .observation_scoring import duration_points,TIERS
+        sample=signals.get('phone_sample_at',stamp)
+        item=self.active.get('phone_detected')
+        if item and sample==item.get('sample'):return []
+        item=self._condition('phone_detected','phone_detected',bool(signals.get('phone')),stamp)
+        if not item:return []
+        item.update(sample=sample,samples=item.get('samples',0)+1)
+        item['max_confidence']=max(item.get('max_confidence',0),signals.get('phone_confidence',0))
+        # Warn for a candidate immediately. A fresh confident model result starts
+        # the recorded five-point episode without waiting two seconds.
+        if item['max_confidence']<max(.5,policy.phone_confidence):return []
+        item.setdefault('confirmed_start',stamp)
+        duration=stamp-item['confirmed_start'];points=duration_points('phone_detected',duration)
+        if points>5 and item['samples']<3:return []
+        if points<=item['points']:return []
+        kind='phone_brief' if points==5 else 'phone_detected'
+        event=self._emit(item,kind,duration,signals,points,max(t for t,p in TIERS['phone'] if p<=points))
+        event[1].update(independent_samples=item['samples'],confidence=round(item['max_confidence'],4))
+        return [event]
+
+    def progress(self, policy, stamp):
+        from .observation_scoring import next_stage,duration_points,family,TIERS
+        thresholds={'face_absent':policy.absence_seconds,'camera_obscured':3,'presentation_attack':6}
+        alerts=[]
+        for key,item in self.active.items():
+            if 'clear_since' in item:continue
+            kind=item['kind'];duration=max(0,item['last_positive']-item.get('confirmed_start',item['start']))
+            threshold=next_stage(kind,duration) if family(kind) in TIERS else thresholds.get(kind)
+            limit=threshold or max(duration,.1)
+            alerts.append({'kind':kind,'seconds':round(duration,1),'threshold':threshold,
+                'progress':min(1,duration/limit),'saved':item['emitted'],'points':item['points'],
+                'next_points':duration_points(kind,threshold) if threshold is not None and family(kind) in TIERS else None,
+                'active':True,'episode_id':item['episode_id']})
+        return sorted(alerts,key=lambda a:(family(a['kind'])!='phone',-a['points'],-a['progress']))

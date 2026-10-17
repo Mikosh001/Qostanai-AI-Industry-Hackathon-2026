@@ -1,5 +1,5 @@
 """Review metadata is derived separately from the immutable observation/hash."""
-OBSERVATIONS = {"phone_detected", "phone_raised", "identity_mismatch", "face_absent",
+OBSERVATIONS = {"phone_detected", "phone_brief", "phone_raised", "identity_mismatch", "face_absent",
                 "multiple_faces", "gaze_down", "gaze_side", "camera_obscured", "sustained_noise", "presentation_attack"}
 SYSTEM_FAILURES = {"application_close_failed", "remote_enforcement_failed", "storage_enforcement_failed",
                    "camera_disconnected", "microphone_disconnected", "camera_pipeline_error",
@@ -26,5 +26,8 @@ def review_category(kind, detail=None):
 
 
 def annotate(event):
+    from .observation_scoring import event_points,family
     category = review_category(event["kind"], event.get("detail"))
-    return {**event, "category": category, "requires_review": category != "technical"}
+    return {**event, "category": category, "requires_review": category != "technical",
+            "review_points":event_points(event) if category=='observation' else 0,
+            "episode_family":family(event['kind'])}

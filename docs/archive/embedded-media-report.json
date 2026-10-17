@@ -1,0 +1,26 @@
+[
+  {
+    "language": "RU",
+    "slides": 10,
+    "poster": "ppt/media/image2.png",
+    "slide_layout_xml_unchanged": true,
+    "video_sha256": "e730504d95e3cde7c236c8a03175e8125e1878892baa2c58cd4607dae2b23cd0",
+    "modified_entries": [
+      "ppt/media/image2.png",
+      "ppt/notesSlides/notesSlide4.xml",
+      "ppt/media/sergek-demo.mp4"
+    ]
+  },
+  {
+    "language": "KK",
+    "slides": 10,
+    "poster": "ppt/media/image2.png",
+    "slide_layout_xml_unchanged": true,
+    "video_sha256": "e730504d95e3cde7c236c8a03175e8125e1878892baa2c58cd4607dae2b23cd0",
+    "modified_entries": [
+      "ppt/media/image2.png",
+      "ppt/notesSlides/notesSlide4.xml",
+      "ppt/media/sergek-demo.mp4"
+    ]
+  }
+]

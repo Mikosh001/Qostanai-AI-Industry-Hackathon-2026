@@ -28,6 +28,8 @@ class Store:
         CREATE TABLE IF NOT EXISTS remote_sessions(id TEXT PRIMARY KEY,data TEXT NOT NULL,updated TEXT NOT NULL);
         CREATE TABLE IF NOT EXISTS received_packets(id TEXT PRIMARY KEY,received REAL NOT NULL);
         CREATE TABLE IF NOT EXISTS integrity_anchors(session_id TEXT PRIMARY KEY,count INTEGER NOT NULL,head TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS review_metrics(session_id TEXT PRIMARY KEY,score INTEGER NOT NULL,summary TEXT NOT NULL);
+        CREATE INDEX IF NOT EXISTS review_queue_score ON review_metrics(score DESC);
         """)
         columns = {r[1] for r in self.db.execute('PRAGMA table_info(sessions)')}
         if 'started' not in columns:
@@ -41,6 +43,33 @@ class Store:
             self.db.execute('UPDATE sessions SET data=? WHERE id=?',(json.dumps(data,ensure_ascii=False),row['id']))
             self.update_anchor(row['id'],len(events),events[-1][0] if events else '0'*64)
         self.db.commit()
+        # Derived metadata is separate from signed observations and can be rebuilt.
+        from .observation_scoring import SCALE
+        for row in self.db.execute("SELECT sessions.id FROM sessions LEFT JOIN review_metrics ON sessions.id=review_metrics.session_id WHERE review_metrics.session_id IS NULL OR coalesce(json_extract(review_metrics.summary,'$.scale'),'')!=?",(SCALE,)).fetchall():
+            self.refresh_review(row['id'])
+        self.db.commit()
+
+    def refresh_review(self, sid, journal_count=None):
+        from .review_priority import review_summary
+        from .event_policy import OBSERVATIONS, SYSTEM_FAILURES
+        kinds=sorted(OBSERVATIONS|SYSTEM_FAILURES|{'sound_activity','foreground_changed','remote_control','forbidden_process'})
+        rows=self.db.execute('SELECT id,kind,detail,verdict FROM events WHERE session_id=? AND kind IN ('+','.join('?' for _ in kinds)+')',[sid,*kinds]).fetchall()
+        events=[{**dict(r),'detail':json.loads(r['detail'])} for r in rows]
+        if journal_count is None:journal_count=self.db.execute('SELECT count(*) FROM events WHERE session_id=?',(sid,)).fetchone()[0]
+        summary=review_summary(events,journal_count)
+        self.db.execute('INSERT OR REPLACE INTO review_metrics VALUES(?,?,?)',(sid,summary['score'],json.dumps(summary,ensure_ascii=False)))
+        return summary
+
+    def review_summaries(self, sids):
+        result={}
+        with self.lock:
+            for start in range(0,len(sids),200):
+                batch=sids[start:start+200]
+                rows=self.db.execute('SELECT session_id,summary FROM review_metrics WHERE session_id IN ('+','.join('?' for _ in batch)+')',batch).fetchall()
+                result.update({r['session_id']:json.loads(r['summary']) for r in rows})
+            for sid in sids:
+                if sid not in result:result[sid]=self.refresh_review(sid)
+        return result
 
     def set_secret(self, key, value):
         """Encrypt transport credentials at rest; DPAPI protects the wrapping key on Windows."""
@@ -113,6 +142,7 @@ class Store:
                     (sid, utc(), "preflight", json.dumps(data, ensure_ascii=False)),
                 )
                 self.update_anchor(sid, 0, "0" * 64)
+                self.refresh_review(sid,0)
                 self.db.commit()
             except Exception:
                 self.db.rollback()
@@ -130,14 +160,15 @@ class Store:
         result["data"] = json.loads(result["data"])
         return result
 
-    def sessions(self,limit=None,offset=0,query=''):
+    def sessions(self,limit=None,offset=0,query='',sort='newest'):
         with self.lock:
-            sql='SELECT * FROM sessions'
+            sql='SELECT sessions.* FROM sessions'
+            if sort=='priority':sql+=' LEFT JOIN review_metrics ON review_metrics.session_id=sessions.id'
             args=[]
             if query:
                 sql+=" WHERE (coalesce(json_extract(data,'$.student'),'') || ' ' || coalesce(json_extract(data,'$.exam'),'')) LIKE ? ESCAPE '\\'"
                 args.append('%'+query.replace('\\','\\\\').replace('%','\\%').replace('_','\\_')+'%')
-            sql+=' ORDER BY created DESC,id DESC'
+            sql+=(' ORDER BY coalesce(review_metrics.score,0) DESC,coalesce(json_extract(review_metrics.summary,\'$.total_points\'),review_metrics.score,0) DESC,sessions.created DESC,sessions.id DESC' if sort=='priority' else ' ORDER BY created DESC,id DESC')
             if limit is not None:sql+=' LIMIT ? OFFSET ?';args.extend([limit,offset])
             rows=self.db.execute(sql,args).fetchall()
         return [{**dict(r), 'data': json.loads(r['data'])} for r in rows]
@@ -221,6 +252,7 @@ class Store:
                 ),
             )
             self.update_anchor(sid, count+1, digest)
+            self.refresh_review(sid,count+1)
             self.db.commit()
         return self.event(eid)
 
@@ -253,9 +285,17 @@ class Store:
 
     def review(self, eid, verdict, note):
         with self.lock:
+            item=self.event(eid)
+            if not item:raise KeyError(eid)
             self.db.execute(
                 "UPDATE events SET verdict=?,note=? WHERE id=?", (verdict, note, eid)
             )
+            episode=item['detail'].get('episode_id')
+            if isinstance(episode,str) and 0<len(episode)<=128:
+                from .observation_scoring import family_kinds
+                kinds=sorted(family_kinds(item['kind']))
+                self.db.execute("UPDATE events SET verdict=?,note=? WHERE session_id=? AND kind IN ("+','.join('?' for _ in kinds)+") AND json_extract(detail,'$.episode_id')=?",(verdict,note,item['session_id'],*kinds,episode))
+            self.refresh_review(item['session_id'])
             self.db.commit()
             self.audit(
                 "event_review", {"event_id": eid, "verdict": verdict, "note": note}
@@ -315,7 +355,7 @@ class Store:
 
     def delete_session(self, sid):
         with self.lock:
-            for table in ["events", "answers", "integrity_anchors"]:
+            for table in ["events", "answers", "integrity_anchors", "review_metrics"]:
                 self.db.execute(f"DELETE FROM {table} WHERE session_id=?", (sid,))
             # Keep the opaque single-use nonce consumed after deleting its session.
             self.db.execute("DELETE FROM sessions WHERE id=?", (sid,))

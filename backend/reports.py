@@ -17,6 +17,7 @@ LABELS = {
     "screen_capture_error": "Экран жазбасы тоқтады",
     "session_started": "Емтихан басталды",
     "phone_detected": "Телефон анықталды",
+    "phone_brief": "Телефон қысқа уақыт көрінді",
     "phone_raised": "Телефон экран алдына көтерілді",
     "face_absent": "Бет кадрда көрінбейді",
     "multiple_faces": "Екінші бет анықталды",
@@ -52,6 +53,7 @@ def _payload(store, sid):
         "schema": "sergek-report/1",
         "session": session,
         "events": [annotate(event) for event in store.events(sid)],
+        "review": store.review_summaries([sid])[sid],
         "integrity_ok": store.integrity(sid),
         "event_anchor": store.anchor(sid),
         "hub_anchor": store.setting('hub_anchor:'+sid),
@@ -141,7 +143,7 @@ def pdf_report(store, sid, lang="kk"):
         rows.append(
             [
                 p(event["created"][11:19]),
-                p(LABELS.get(event["kind"], event["kind"])),
+                p(text(LABELS.get(event["kind"], event["kind"])) + (f" · {event.get('review_points',0)} {text('балл')} · {event['detail'].get('duration_seconds',0)} {text('секунд')}" if event['category']=='observation' else '')),
                 p(text(states.get(event["verdict"], event["verdict"])) + " " + event["note"]),
             ]
         )

@@ -74,6 +74,7 @@ const labels: Record<string, string> = {
     "Антивирус қорғанысы расталмады. Қорғаныс орталығын тексеріңіз.",
   package_integrity_lost: "Қосымша файлдарының тұтастығы расталмады",
   phone_detected: "Телефон анықталды",
+  phone_brief: "Телефон қысқа уақыт көрінді",
   phone_raised: "Телефон экран алдына көтерілді",
   face_absent: "Бет көрінбейді",
   multiple_faces: "Екінші бет анықталды",
@@ -242,6 +243,195 @@ function interruptionMessage(reason: string) {
   return t(
     messages[reason] ||
       "Бақылау талаптарының бірі орындалмады. Нақты себеп оқиғалар журналында сақталды.",
+  );
+}
+
+function groupedEpisodes(events: any[]) {
+  const groups = new Map<string, any[]>();
+  for (const event of events) {
+    const key = typeof event.detail?.episode_id === "string" && event.detail.episode_id.length <= 128
+      ? `${event.episode_family || event.kind}:${event.detail.episode_id}`
+      : event.id;
+    groups.set(key, [...(groups.get(key) || []), event]);
+  }
+  return Array.from(groups.values())
+    .map((history) => {
+      const representative = history.reduce((best, item) =>
+        (item.review_points || 0) >= (best.review_points || 0) ? item : best,
+      );
+      return { ...representative, episode_history: history };
+    })
+    .sort((a, b) => a.created.localeCompare(b.created));
+}
+
+function ScoringSchedule() {
+  return (
+    <details className="scoring-rules">
+      <summary>{t("Ұпай қалай есептеледі?")}</summary>
+      <p>
+        {t("Кезеңдер қосылмайды: бір эпизодтың ең жоғары ұпайы есептеледі.")}
+      </p>
+      <table>
+        <tbody>
+          {[
+            ["Телефон", "Бірден: 5 · 2 с: 10 · 5 с: 15 · 10 с: 20"],
+            ["Кадрдағы екінші адам", "3 с: 2 балл"],
+            ["Кадрда жалғыз басқа адам", "3 с: 10 · 5 с: 15"],
+            ["Жанға немесе төмен қарау", "5 с: 3 · 10 с: 5 · 20 с: 10"],
+            ["Айқын шу немесе ұзақ сөйлеу", "Бір дыбыс эпизоды: 1 балл"],
+          ].map(([name, rule]) => (
+            <tr key={name}>
+              <td>{t(name)}</td>
+              <td>{t(rule)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p>
+        {t(
+          "Ескерту бірден шығады. Қысқа өтіп кеткен екінші адам ұпай қоспайды.",
+        )}
+      </p>
+    </details>
+  );
+}
+
+function ReviewPriority({
+  review,
+  compact = false,
+}: {
+  review: any;
+  compact?: boolean;
+}) {
+  const score = Math.max(0, Math.min(100, Number(review?.score) || 0));
+  const level =
+    score >= 60 ? "high" : score >= 25 ? "medium" : score ? "low" : "clear";
+  return (
+    <div className={"review-priority " + level + (compact ? " compact" : "")}>
+      <div className="priority-caption">
+        <span>{t("Тексеру басымдығы")}</span>
+        <strong>
+          {score}
+          <small>/100</small>
+        </strong>
+      </div>
+      {(review?.total_points || 0) > 100 && (
+        <small>
+          {t("Эпизод ұпайлары:")} {review.total_points}
+        </small>
+      )}
+      <div
+        className="priority-track"
+        role="meter"
+        aria-label={t("Тексеру басымдығы")}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={score}
+      >
+        <span style={{ width: score + "%" }} />
+      </div>
+      {!compact && (
+        <p>{t("Бағаға автоматты әсер етпейді. Шешімді оқытушы қабылдайды.")}</p>
+      )}
+    </div>
+  );
+}
+
+function StudentFeedback({
+  feedback,
+  docked = false,
+}: {
+  feedback: any;
+  docked?: boolean;
+}) {
+  if (!feedback?.active) return null;
+  const messages: Record<string, string> = {
+    phone_detected: "Телефонды алып тастаңыз.",
+    phone_brief: "Телефонды алып тастаңыз.",
+    gaze_side: "Экранға қараңыз.",
+    gaze_down: "Назарыңызды тестке аударыңыз.",
+    face_absent: "Камераға оралыңыз.",
+    multiple_faces: "Кадрда тек өзіңіз болыңыз.",
+    identity_mismatch: "Бетіңіз камерада анық көрінсін.",
+    camera_obscured: "Камераны ашып, жарықты тексеріңіз.",
+    presentation_attack: "Камерада өзіңіз анық көрініңіз.",
+    sound_activity: "Тыныштық сақтаңыз.",
+    sustained_noise: "Артық шуды азайтыңыз.",
+  };
+  const alerts = feedback.alerts || [];
+  return (
+    <section
+      className={"student-feedback" + (docked ? " docked" : " card")}
+      aria-label={t("Бақылау ескертулері")}
+    >
+      <div className="feedback-summary">
+        <ReviewPriority review={feedback.review} compact />
+        <span className="feedback-count">
+          {t("Оқытушыға тексеруге:")}{" "}
+          <strong>{feedback.review?.pending_episodes || 0}</strong>{" "}
+          {t("эпизод")}
+        </span>
+      </div>
+      <div className="feedback-alerts">
+        {alerts.length ? (
+          alerts.map((alert: any) => (
+            <div
+              className={"feedback-alert" + (alert.saved ? " saved" : "")}
+              key={alert.kind}
+            >
+              <div className="feedback-alert-title">
+                <AlertTriangle size={17} />
+                <strong role="status">
+                  {t(
+                    alert.active
+                      ? messages[alert.kind] || "Емтихан ережесін сақтаңыз."
+                      : "Эпизод сақталды. Тестті жалғастырыңыз.",
+                  )}
+                </strong>
+              </div>
+              <div className="feedback-meta">
+                <span>{t(labels[alert.kind] || alert.kind)}</span>
+                <span>
+                  {alert.saved ? t("Эпизод сақталды") : t("Бақылануда")}
+                  {" · "}
+                  {alert.points || 0} {t("балл")}
+                </span>
+              </div>
+              <div
+                className="feedback-progress"
+                role="progressbar"
+                aria-label={t(labels[alert.kind] || alert.kind)}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={Math.round(alert.progress * 100)}
+              >
+                <span
+                  style={{ width: Math.min(100, alert.progress * 100) + "%" }}
+                />
+              </div>
+              <span className="feedback-seconds">
+                {Number(alert.seconds || 0).toFixed(1)} {t("секунд")}
+                {alert.threshold
+                  ? " / " + alert.threshold + " " + t("секунд")
+                  : ""}
+                {alert.next_points
+                  ? " → " + alert.next_points + " " + t("балл")
+                  : ""}
+              </span>
+            </div>
+          ))
+        ) : (
+          <div className="feedback-calm">
+            <ShieldCheck size={20} />
+            <span>
+              {feedback.analysis_fresh
+                ? t("Бақылау қосулы. Тестті жалғастырыңыз.")
+                : t("Бақылау деректері жаңартылуда…")}
+            </span>
+          </div>
+        )}
+      </div>
+    </section>
   );
 }
 
@@ -483,11 +673,6 @@ function Student({
               ? t("Қорғаныс пен жазба қосулы")
               : t("Moodle-де «Start attempt» басыңыз")}
           </span>
-          {session.status === "active" &&
-            signals.phone &&
-            snapshot?.status?.last_analysis_age < 2 && (
-              <span className="header-error">{t("Телефон байқалды")}</span>
-            )}
           <span className="muted">
             {t(
               "Жауапты Moodle ішінде тапсырыңыз. Сессия автоматты аяқталады.",
@@ -497,6 +682,7 @@ function Student({
             <span className="header-error">{friendlyError(error)}</span>
           )}
         </div>
+        <StudentFeedback feedback={snapshot?.feedback} docked />
         {startProgress && (
           <div className="exam-loading" role="status">
             <ShieldCheck size={42} />
@@ -1041,6 +1227,7 @@ function Student({
                 </div>
               </section>
               <aside>
+                <StudentFeedback feedback={snapshot?.feedback} />
                 <section className="card">
                   <h3>{t("Сұрақтар навигациясы")}</h3>
                   <div className="question-numbers">
@@ -1079,21 +1266,6 @@ function Student({
                         {t("Микрофон қосылған ·")}{" "}
                         {snapshot?.status?.microphone_dbfs ?? "—"} dBFS
                       </span>
-                    </div>
-                  )}
-                  {signals.phone && (
-                    <div className="notice error">
-                      {t("Телефонды алып тастаңыз.")}
-                    </div>
-                  )}
-                  {cameraRequired && signals.faces === 0 && (
-                    <div className="notice">{t("Камераға оралыңыз.")}</div>
-                  )}
-                  {cameraRequired && signals.identity?.state === "mismatch" && (
-                    <div className="notice error">
-                      {t(
-                        "Бет бастапқы фотомен сәйкеспейді. Мұғалім тексеретін оқиға тіркеледі.",
-                      )}{" "}
                     </div>
                   )}
                 </section>
@@ -1282,10 +1454,16 @@ function Teacher({
   const [selected, setSelected] = useState("");
   const [detail, setDetail] = useState<any>(null);
   const [showTechnical, setShowTechnical] = useState(false);
-  const visibleEvents =
+  const [pendingOnly, setPendingOnly] = useState(false);
+  const [sessionSort, setSessionSort] = useState("priority");
+  const visibleEvents = groupedEpisodes(
     detail?.events?.filter(
-      (item: any) => showTechnical || item.requires_review !== false,
-    ) || [];
+      (item: any) =>
+        (showTechnical || item.requires_review !== false) &&
+        (!pendingOnly ||
+          (item.category === "observation" && item.verdict === "pending")),
+    ) || [],
+  );
   const [profile, setProfile] = useState<any>(null);
   const [integration, setIntegration] = useState<any>(null);
   const [diagnostics, setDiagnostics] = useState<any>(null);
@@ -1327,7 +1505,9 @@ function Teacher({
         "/session-page?limit=100&offset=" +
           pageOffset +
           "&q=" +
-          encodeURIComponent(query),
+          encodeURIComponent(query) +
+          "&sort=" +
+          sessionSort,
       ),
       api("/profile"),
       api("/integration"),
@@ -1340,7 +1520,7 @@ function Teacher({
     if (i.role === "hub") setDevices(await api("/integration/devices"));
     setDiagnostics(d);
     if (selected) setDetail(await api("/sessions/" + selected));
-  }, [selected, pageOffset, query]);
+  }, [selected, pageOffset, query, sessionSort]);
   useEffect(() => {
     api("/auth/me")
       .then(() => setLogged(true))
@@ -1663,6 +1843,22 @@ function Teacher({
                       placeholder={t("Студент немесе емтихан")}
                     />
                   </div>
+                  <label className="session-sort">
+                    {t("Реттеу")}
+                    <select
+                      aria-label={t("Сессияларды реттеу")}
+                      value={sessionSort}
+                      onChange={(e) => {
+                        setPageOffset(0);
+                        setSessionSort(e.target.value);
+                      }}
+                    >
+                      <option value="priority">
+                        {t("Алдымен тексеру қажет")}
+                      </option>
+                      <option value="newest">{t("Ең жаңалары")}</option>
+                    </select>
+                  </label>
                 </div>
                 {filtered.length ? (
                   <table>
@@ -1673,6 +1869,7 @@ function Teacher({
                         <th>{t("Басталды")}</th>
                         <th>{t("Күй")}</th>
                         <th>{t("Оқиға")}</th>
+                        <th>{t("Тексеру басымдығы")}</th>
                         <th />
                       </tr>
                     </thead>
@@ -1707,6 +1904,9 @@ function Teacher({
                           </td>
                           <td>
                             <strong>{item.event_count}</strong>
+                          </td>
+                          <td>
+                            <ReviewPriority review={item.review} compact />
                           </td>
                           <td>
                             <ChevronRight size={18} />
@@ -1867,6 +2067,34 @@ function Teacher({
                     : t("Әкімшінің бағдарламалық сынағы")}
                 </span>
               </div>
+              <section className="card review-summary">
+                <ReviewPriority review={detail.review} />
+                <div className="review-summary-body">
+                  <h3>{t("Алдымен тексерілетін эпизодтар")}</h3>
+                  <p>
+                    {t("Тексерілмеген:")}{" "}
+                    <strong>{detail.review?.pending_episodes || 0}</strong>{" "}
+                    {t("эпизод")}
+                  </p>
+                  <div className="review-reasons">
+                    {(detail.review?.reasons || [])
+                      .slice(0, 3)
+                      .map((reason: any) => (
+                        <span key={reason.kind}>
+                          {t(labels[reason.kind] || reason.kind)}{" "}
+                          <strong>{reason.count}</strong>
+                          {" · "}
+                          {reason.points || 0} {t("балл")}
+                        </span>
+                      ))}
+                  </div>
+                  <p className="muted">
+                    {t(
+                      "Техникалық бұғаттаулар мен негізсіз деп белгіленген оқиғалар басымдықты арттырмайды.",
+                    )}
+                  </p>
+                </div>
+              </section>
               <section className="card">
                 <h2>{t("Оқиғалар уақыт шкаласы")}</h2>
                 <p>
@@ -1881,6 +2109,14 @@ function Teacher({
                     onChange={(e) => setShowTechnical(e.target.checked)}
                   />
                   {t("Техникалық журналды да көрсету")}{" "}
+                </label>
+                <label className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={pendingOnly}
+                    onChange={(e) => setPendingOnly(e.target.checked)}
+                  />
+                  {t("Тек тексерілмеген бақылаулар")}
                 </label>
                 {visibleEvents.length ? (
                   <div className="timeline">
@@ -1900,6 +2136,18 @@ function Teacher({
                             {item.detail.duration_seconds
                               ? ` · ${item.detail.duration_seconds} ${t("секунд")}`
                               : ""}
+                            {item.category === "observation" && (
+                              <span className="event-points">
+                                {" "}
+                                · {item.review_points || 0} {t("балл")}
+                              </span>
+                            )}
+                            {item.episode_history?.length > 1 && (
+                              <span>
+                                {" "}
+                                · {item.episode_history.length} {t("кезең")}
+                              </span>
+                            )}
                           </p>
                         </div>
                         {item.requires_review === false ? (
@@ -1926,8 +2174,11 @@ function Teacher({
                   </div>
                 )}
               </section>
-              <section className="card technical">
-                <h3>{t("Дайындық және қорғаныс нәтижесі")}</h3>
+              <details className="card technical preflight-details">
+                <summary>
+                  <h3>{t("Дайындық және қорғаныс нәтижесі")}</h3>
+                  <ChevronRight size={20} />
+                </summary>
                 <pre>
                   {JSON.stringify(
                     detail.session.data.preflight || {
@@ -1937,7 +2188,7 @@ function Teacher({
                     2,
                   )}
                 </pre>
-              </section>
+              </details>
               {["completed", "interrupted"].includes(detail.session.status) && (
                 <button
                   className="btn text danger"
@@ -2109,19 +2360,14 @@ function Teacher({
                       />
                     </label>
                   ))}
+                  <ScoringSchedule />
                   {[
-                    ["phone_seconds", t("Телефон тұрақтылығы, секунд")],
                     [
                       "phone_confidence",
                       t("Телефон анықтауының сенімділік шегі"),
                     ],
                     ["sound_seconds", t("Дауыс ұзақтығы, кемінде 3 секунд")],
-                    ["gaze_seconds", t("Ұзақ қарау, секунд")],
                     ["absence_seconds", t("Бет жоғалуы, секунд")],
-                    [
-                      "identity_seconds",
-                      t("Бет сәйкессіздігінің ұзақтығы, секунд"),
-                    ],
                     ["identity_threshold", t("Бет ұқсастығының шегі")],
                     ["retention_days", t("Сақтау мерзімі, күн")],
                   ].map(([key, label]) => (
@@ -2370,6 +2616,14 @@ function Teacher({
                 <span className="eyebrow">{t("ОҚИҒАНЫ ТЕКСЕРУ")}</span>
                 <h2>{t(labels[event.kind] || event.kind)}</h2>
                 <p>{date(event.created)}</p>
+                {event.category === "observation" && (
+                  <p>
+                    <strong>
+                      {event.review_points || 0} {t("балл")}
+                    </strong>{" "}
+                    · {t("Бір эпизодтың жалпы ұпайы")}
+                  </p>
+                )}
               </div>
               <button
                 className="btn text"
@@ -2381,6 +2635,34 @@ function Teacher({
                 {t("Жабу")} <XCircle size={20} />
               </button>
             </div>
+            {event.episode_history?.length > 1 && (
+              <details className="episode-history" open>
+                <summary>{t("Ұпайдың өсу тарихы")}</summary>
+                <p>
+                  {t(
+                    "Кезеңдер қосылмайды: бір эпизодтың ең жоғары ұпайы есептеледі.",
+                  )}
+                </p>
+                {event.episode_history.map((stage: any) => (
+                  <button
+                    className="btn text"
+                    key={stage.id}
+                    onClick={() =>
+                      action(() =>
+                        openEvent({
+                          ...stage,
+                          episode_history: event.episode_history,
+                        }),
+                      )
+                    }
+                  >
+                    {Number(stage.detail.duration_seconds || 0).toFixed(1)}{" "}
+                    {t("секунд")} · {stage.review_points || 0} {t("балл")}
+                    {stage.media ? " · " + t("Бейнеүзінді") : ""}
+                  </button>
+                ))}
+              </details>
+            )}
             {referencePhoto?.photo && (
               <div className="reference-photo">
                 <img

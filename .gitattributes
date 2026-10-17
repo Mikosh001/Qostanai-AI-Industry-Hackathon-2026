@@ -1,0 +1,16 @@
+# Preserve published checksums and all media/model bytes on Windows.
+*.pdf binary
+*.pptx binary
+*.mp4 binary
+*.webm binary
+*.gif binary
+*.png binary
+*.jpg binary
+*.ico binary
+*.onnx binary
+*.tflite binary
+*.task binary
+*.wav binary
+*.zip binary
+*.demobuilder binary
+final/** -text

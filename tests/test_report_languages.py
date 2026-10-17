@@ -29,3 +29,11 @@ def test_pdf_language_preserves_data_and_review_separation(tmp_path, lang, title
 def test_invalid_pdf_language_rejected(tmp_path):
     with pytest.raises(ValueError, match="Unsupported report language"):
         pdf_report(Store(tmp_path / "report.db"), "irrelevant", "invalid")
+
+def test_pdf_score_and_non_numeric_duration_are_safe(tmp_path):
+    store=Store(tmp_path/'report.db')
+    sid=store.create_session({'student':'Fixture','exam':'Report','platform':'local'})['id']
+    store.add_event(sid,'gaze_side',{'duration_seconds':'unavailable','points':100})
+    content=pdf_report(store,sid,'ru')
+    text='\n'.join(page.extract_text() for page in PdfReader(BytesIO(content)).pages)
+    assert '0 баллов' in text and 'unavailable' in text

@@ -38,6 +38,10 @@ internal static partial class Program {
             Parents=new(){{102,101},{101,100},{103,102},{200,100}};
             TrustedPids=new(){102};ExamOwnerPid=102;
             return Trusted(102)&&Trusted(103)&&!Trusted(101)&&ExamLauncher(101)&&ExamLauncher(100)&&!ExamLauncher(102)&&!ExamLauncher(200)
+                &&ApplicationClosureDecision(false,700)=="pending"
+                &&ApplicationClosureDecision(false,2999)=="pending"
+                &&ApplicationClosureDecision(true,1200)=="closed"
+                &&ApplicationClosureDecision(false,3000)=="failed"
                 &&ExamForegroundMatches((nint)10,(nint)10,(nint)10,102,102)
                 &&ExamForegroundMatches((nint)10,(nint)11,(nint)10,102,102)
                 &&ExamForegroundMatches((nint)10,(nint)11,(nint)11,102,102)

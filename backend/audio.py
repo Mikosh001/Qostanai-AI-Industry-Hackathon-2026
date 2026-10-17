@@ -4,6 +4,7 @@ import queue
 import threading
 import time
 import wave
+import uuid
 from collections import deque
 import numpy as np
 
@@ -45,6 +46,26 @@ class Microphone:
         self.noise_seconds = 0.0
         self.last_noise = None
         self.noise_emitted = False
+        self.audio_episode_id = None
+        self.audio_last_active = None
+        self.audio_emitted = False
+        self.feedback_snapshot = None
+        self.exam_reset = threading.Event()
+
+    def arm_exam(self):
+        # The capture worker owns the episode state; reset at its next PCM block.
+        self.exam_reset.set()
+
+    def reset_audio(self):
+        self.reset_episode()
+        self.noise_seconds,self.last_noise,self.noise_emitted=0.0,None,False
+        self.audio_episode_id=self.audio_last_active=None
+        self.audio_emitted=False
+        self.feedback_snapshot=None
+
+    def feedback(self, stamp):
+        item=self.feedback_snapshot
+        return [dict(item)] if item and stamp-item['at']<1.2 else []
 
     def ensure_detector(self):
         if self.detector is None:
@@ -89,6 +110,8 @@ class Microphone:
         self.dropouts.append(time.monotonic())
 
     def process(self, stamp, pcm):
+        if self.exam_reset.is_set():
+            self.reset_audio();self.exam_reset.clear()
         samples = np.frombuffer(pcm, dtype=np.int16).astype(np.float32) / 32768
         rms = float(np.sqrt(np.mean(samples * samples))) if len(samples) else 0
         self.level = round(20 * np.log10(max(rms, 1e-5)), 1)
@@ -96,20 +119,29 @@ class Microphone:
         self.ensure_detector()
         if gap > 0.5:
             self.detector.reset()
-            self.reset_episode()
-            self.noise_seconds, self.last_noise, self.noise_emitted = 0.0, None, False
+            self.reset_audio()
         self.last_frame = stamp
         self.consume(stamp, pcm, "audio")
         self.speech_probability = self.detector.probability(samples)
         duration = len(samples) / RATE
         voiced = self.level >= self.threshold and self.speech_probability >= 0.8
+        audible=voiced or self.level>=self.noise_threshold
+        # Brief pauses in one conversation/noise burst do not fill the scale.
+        if self.audio_last_active is not None and stamp-self.audio_last_active>=5:
+            self.reset_audio()
+        if audible:
+            if not self.audio_episode_id:self.audio_episode_id='audio-'+uuid.uuid4().hex
+            self.audio_last_active=stamp
         if self.level >= self.noise_threshold and not voiced:
             self.last_noise = stamp
             self.noise_seconds += duration
-            if self.noise_seconds >= self.seconds and not self.noise_emitted:
+            if self.noise_seconds >= .5 and not self.noise_emitted and not self.audio_emitted:
                 self.noise_emitted = True
+                self.audio_emitted = True
                 self.notify("sustained_noise", {"detector": "sustained-loudness-v1",
                     "level_dbfs": self.level, "noise_seconds": round(self.noise_seconds, 2),
+                    "duration_seconds":round(self.noise_seconds,2),"episode_id":self.audio_episode_id,
+                    "scoring_scale":"review-priority/2","points":1,"points_delta":1,
                     "threshold_dbfs": self.noise_threshold,
                     "meaning": "Sustained loud non-speech sound; review audio, no speaker attribution."})
         elif self.last_noise is None or stamp - self.last_noise >= 1.2:
@@ -119,10 +151,12 @@ class Microphone:
                 self.since = stamp
             self.last_voice = stamp
             self.voiced_seconds += duration
-            if self.voiced_seconds >= self.seconds and not self.episode_emitted and stamp - self.last_event >= 60:
+            if self.voiced_seconds >= self.seconds and not self.episode_emitted and not self.audio_emitted:
                 self.last_event = stamp
                 self.episode_emitted = True
+                self.audio_emitted = True
                 self.notify("sound_activity", {
+                    "episode_id":self.audio_episode_id,"scoring_scale":"review-priority/2","points":1,"points_delta":1,
                     "level_dbfs": self.level, "duration_seconds": round(stamp - self.since, 1),
                     "voiced_seconds": round(self.voiced_seconds, 2),
                     "speech_probability": round(self.speech_probability, 3),
@@ -131,6 +165,13 @@ class Microphone:
                 })
         elif self.last_voice is None or stamp - self.last_voice >= 1.2:
             self.reset_episode()
+        if audible:
+            seconds=self.voiced_seconds if voiced else self.noise_seconds
+            threshold=self.seconds if voiced else .5
+            self.feedback_snapshot={'kind':'sound_activity' if voiced else 'sustained_noise',
+                'seconds':round(seconds,1),'threshold':None if self.audio_emitted else threshold,'progress':min(1,seconds/threshold),
+                'saved':self.audio_emitted,'points':int(self.audio_emitted),'next_points':None if self.audio_emitted else 1,
+                'active':True,'episode_id':self.audio_episode_id,'at':stamp}
         self.ready.set()
 
     def reset_episode(self):

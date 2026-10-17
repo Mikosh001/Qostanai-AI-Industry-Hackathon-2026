@@ -1,0 +1,1 @@
+{"id": "/", "name": "Sergек — подготовка к финалу", "short_name": "Sergек финал", "start_url": "./START.html", "scope": "./", "display": "standalone", "background_color": "#f3f7ff", "theme_color": "#245de8", "icons": [{"src": "assets/icon-192.png", "sizes": "192x192", "type": "image/png"}, {"src": "assets/icon-512.png", "sizes": "512x512", "type": "image/png"}]}

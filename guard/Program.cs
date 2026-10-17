@@ -195,6 +195,7 @@ internal static partial class Program {
         keyboard_scope="Alt/Win chords, function/capture keys, unapproved Ctrl chords, 3/4-finger touchpad shell gestures; Ctrl+Alt+F12 recovery; not Ctrl+Alt+Del",
         application_enforced=Active&&CloseApplications, remote_enforced=RemoteEnforced,
         unapproved_applications=Active&&CloseApplications?UnapprovedWindows():new List<object>(),
+        pending_applications=PendingApplications(),
         remote_session=Native.GetSystemMetrics(0x1000)!=0,
         capture_protected=ExamWindow!=0&&Native.GetWindowDisplayAffinity(ExamWindow,out var affinity)&&affinity==0x11,lease_seconds=Math.Max(0,10-(Environment.TickCount64-Lease)/1000),
         storage_devices=CachedStorage,peripherals=CachedPeripherals,forbidden_processes=ForbiddenProcesses(),
@@ -302,6 +303,7 @@ internal static partial class Program {
         Active=false;BlockKeyboard=false;
         AntivirusRequired=false;IntegrityRequired=false;
         CloseApplications=false;
+        ClearPendingApplicationClosures();
         if(HookThreadId!=0)Native.PostThreadMessage(HookThreadId,0x12,0,0);
         if(HookThread!=null&&HookThread!=Thread.CurrentThread)HookThread.Join(1500);
         HookThread=null;HookThreadId=0;

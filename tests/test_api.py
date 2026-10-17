@@ -55,6 +55,9 @@ class TestCamera:
     def snapshot(self, include_preview=True):
         return {"signals": self.signals, "preview": None, "status": self.status()}
 
+    def student_feedback(self, session, review):
+        return {'active':session['status']=='active','alerts':[],'review':review,'analysis_fresh':False}
+
     def start_recording(self):
         pass
 
@@ -133,11 +136,27 @@ def test_auth_csrf_and_desktop_separation(client):
     client.post("/api/auth/logout")
     assert client.get("/api/sessions").status_code == 401
     for _ in range(5):
-        assert (
-            client.post("/api/auth/login", json={"password": "wrong"}).status_code
-            == 401
-        )
+        assert client.post("/api/auth/login", json={"password": "wrong"}).status_code == 401
     assert client.post("/api/auth/login", json={"password": "wrong"}).status_code == 429
+
+
+def test_review_queue_orders_globally_and_excludes_blocks(client):
+    high=module.store.create_session({'student':'Needs review','exam':'Exam'})['id']
+    module.store.add_event(high,'phone_detected',{})
+    low=module.store.create_session({'student':'Blocked only','exam':'Exam'})['id']
+    module.store.add_event(low,'application_closed',{'blocked':True})
+    page=client.get('/api/session-page?limit=1').json()
+    assert page['items'][0]['id']==high and page['items'][0]['review']['score']==10
+    assert client.get('/api/session-page?limit=1&sort=newest').json()['items'][0]['id']==low
+    assert client.get('/api/session-page?sort=invalid').status_code==422
+
+
+def test_pending_process_exit_cannot_start_a_strict_exam(client):
+    value=create(client,mode='strict');sid=value['session']['id']
+    response=client.post(f'/api/student/{sid}/start',headers=headers(value),json={'guard':{'pending_applications':[{'pid':123,'name':'fixture.exe'}]}})
+    assert response.status_code==409
+    assert 'Бөгде бағдарламалардың автоматты жабылуын күтіңіз' in response.json()['detail']['errors']
+    assert module.store.session(sid)['status']=='preflight' and module.store.session(sid)['started'] is None
 
 
 def test_local_exam_answers_report_review_and_delete(client):

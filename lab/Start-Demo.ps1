@@ -8,7 +8,10 @@ if (!$Python) {
 }
 if (!(Test-Path -LiteralPath $Python)) { throw 'Run scripts\Setup-Dev.ps1 first.' }
 if (!$Executable) { $Executable = Join-Path ([Environment]::GetFolderPath('ProgramFiles')) 'Sergek Proctor\Sergek Proctor.exe' }
-if (!(Test-Path -LiteralPath $Executable)) { $Executable = Join-Path $projectRoot 'release-v1.6.1\win-unpacked\Sergek Proctor.exe' }
+if (!(Test-Path -LiteralPath $Executable)) {
+    $packageInfo = Get-Content -LiteralPath (Join-Path $projectRoot 'package.json') -Raw | ConvertFrom-Json
+    $Executable = Join-Path $projectRoot ('release-v' + $packageInfo.version + '\win-unpacked\Sergek Proctor.exe')
+}
 if (!(Test-Path -LiteralPath $Executable)) { $Executable = Join-Path $env:LOCALAPPDATA 'Programs\Sergek Proctor\Sergek Proctor.exe' }
 if (!(Test-Path -LiteralPath $Executable)) { throw 'Install Sergек or build the Windows package first.' }
 # Standard UAC authorizes Windows protection; student sees no teacher password.

@@ -16,6 +16,7 @@ for (const name of [
   "main.cjs",
   "focus-recovery.cjs",
   "start-flow.cjs",
+  "guard-events.cjs",
   "policy.cjs",
   "navigation.cjs",
   "preload.cjs",

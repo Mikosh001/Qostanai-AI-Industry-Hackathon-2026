@@ -43,6 +43,7 @@ class Engine:
         self.frames = deque()
         self.pending = []
         self.rules = TemporalRules()
+        self.feedback_recent = deque(maxlen=8)
         self.capture_error = ""
         self.last_frame_at = 0
         self.fps = 0
@@ -111,6 +112,7 @@ class Engine:
             self.analysis_fps = self.screen_fps = self.fps = 0
             self.pending.clear()
             self.rules = TemporalRules()
+            self.feedback_recent.clear()
             self.capture_error = ""
             self.preview = None
             self.signals = {}
@@ -225,9 +227,9 @@ class Engine:
                 self.analysis_fps = ((len(completed) - 1) / max(0.001, completed[-1] - completed[0])) if len(completed) > 1 else 0
                 item = self.store.session(self.sid) if self.sid else None
                 if item and item["status"] == "active":
-                    for kind, detail in self.rules.update(
-                        signals, self.policy, time.monotonic()
-                    ):
+                    with self.lock:
+                        observations=self.rules.update(signals,self.policy,time.monotonic())
+                    for kind, detail in observations:
                         self.record(kind, detail)
             except Exception as exc:
                 logging.exception("AI worker failed")
@@ -357,7 +359,7 @@ class Engine:
             now = time.monotonic()
             if not hasattr(self, "last_events"):
                 self.last_events = {}
-            dedup = kind + ":" + str(detail.get("pid", detail.get("name", "")))
+            dedup = kind + ":" + str(detail.get('episode_id',detail.get("pid", detail.get("name", "")))) + ':' + str(detail.get('points',''))
             if now - self.last_events.get(dedup, -100) < 2:
                 return None
             self.last_events[dedup] = now
@@ -367,10 +369,18 @@ class Engine:
             if self.signals:
                 detail = {**detail, "context": dict(self.signals)}
             event = self.store.add_event(self.sid, kind, detail)
+            if review_category(kind,detail)=='observation':
+                if not hasattr(self,'feedback_recent'):self.feedback_recent=deque(maxlen=8)
+                self.feedback_recent.append({'kind':kind,'at':now,'episode_id':detail.get('episode_id'),
+                    'seconds':detail.get('duration_seconds',0),'threshold':detail.get('threshold_seconds',0),
+                    'points':detail.get('points',0),
+                    'progress':1,'saved':True,'active':False})
             if review_category(kind, detail) == "technical":
                 return event
             self.writes=[f for f in self.writes if not f.done()]
-            if len(self.pending)>=8 or len(self.writes)>=4:
+            # A phone and gaze can legitimately create seven duration stages.
+            # Keep this burst bounded without dropping its later evidence clips.
+            if len(self.pending)>=8 or len(self.writes)>=8:
                 self._evidence_failed(RuntimeError('Evidence queue capacity exceeded'),event['id'])
                 return event
             tracks = {"camera": list(self.frames), "screen": list(self.screen_frames),
@@ -563,3 +573,23 @@ class Engine:
                 ),
                 "status": self.status(),
             }
+
+    def student_feedback(self, session, review):
+        with self.lock:
+            now=time.monotonic()
+            active=bool(session and session['status']=='active' and self.sid==session['id'])
+            fresh=bool(self.last_analysis_at and now-self.last_analysis_at<2)
+            alerts=self.rules.progress(self.policy,now) if active and fresh and self.policy else []
+            if active:
+                for item in reversed(getattr(self,'feedback_recent',[])):
+                    if now-item['at']>4:continue
+                    from .observation_scoring import family
+                    if not any(family(a['kind'])==family(item['kind']) and a.get('episode_id')==item.get('episode_id') for a in alerts):alerts.append({k:v for k,v in item.items() if k!='at'})
+        if active and self.microphone:
+            for sound in self.microphone.feedback(now):
+                alerts=[a for a in alerts if a['kind'] not in {'sound_activity','sustained_noise'}]
+                alerts.append(sound)
+        priority={'phone_detected':0,'phone_brief':0,'identity_mismatch':1,'multiple_faces':2,
+                  'gaze_side':3,'gaze_down':3,'sound_activity':4,'sustained_noise':4}
+        alerts.sort(key=lambda a:priority.get(a['kind'],5))
+        return {'active':active,'alerts':alerts[:3],'review':review,'analysis_fresh':fresh}

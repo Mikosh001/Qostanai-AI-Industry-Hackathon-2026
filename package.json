@@ -1,6 +1,6 @@
 {
   "name": "sergek-proctor",
-  "version": "1.6.1",
+  "version": "1.8.0",
   "private": true,
   "description": "Local proctoring and protected examination environment",
   "author": "Sergek hackathon team",
@@ -47,7 +47,7 @@
     "appId": "kz.sergek.proctor",
     "productName": "Sergek Proctor",
     "directories": {
-      "output": "release-v1.6.1"
+      "output": "release-v1.8.0"
     },
     "files": [
       "desktop/**/*",

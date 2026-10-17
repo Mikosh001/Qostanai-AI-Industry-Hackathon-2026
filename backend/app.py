@@ -715,9 +715,12 @@ def create_session(value: SessionCreate):
 
 @app.get("/api/student/{sid}/snapshot", dependencies=[Depends(session_auth)])
 def snapshot(sid: str):
+    item=store.session(sid)
+    review=store.review_summaries([sid])[sid]
     return {
         **engine.snapshot(include_preview=False),
-        "session": clean_session(store.session(sid)),
+        "session": clean_session(item),
+        "feedback": engine.student_feedback(item,review),
         "event_count": sum(annotate(event)["requires_review"] for event in store.events(sid)),
     }
 
@@ -871,6 +874,8 @@ def start(sid: str, value: dict):
             errors.append("Бөгде бағдарламаларды автоматты жабу аяқталмады")
         if native.get('unapproved_applications'):
             errors.append('Бөгде бағдарламалардың автоматты жабылуын күтіңіз')
+        if native.get('pending_applications'):
+            errors.append('Бөгде бағдарламалардың автоматты жабылуын күтіңіз')
         if policy.close_applications and not native.get("application_enforced"):
             errors.append("Бағдарламаларды автоматты жабу қорғанысы қосылмады")
         if policy.remote_block and (
@@ -900,6 +905,7 @@ def start(sid: str, value: dict):
         },
     )
     heartbeats[sid] = time.monotonic()
+    if getattr(engine,'microphone',None):engine.microphone.arm_exam()
     return clean_session(store.session(sid))
 
 
@@ -1067,10 +1073,11 @@ def list_sessions(limit: int=Query(100,ge=1,le=200),offset: int=Query(0,ge=0)):
 
 
 @app.get('/api/session-page',dependencies=[Depends(teacher)])
-def session_page(limit: int=Query(100,ge=1,le=200),offset: int=Query(0,ge=0),q: str=Query('',max_length=160)):
-    sessions=store.sessions(limit,offset,q)
+def session_page(limit: int=Query(100,ge=1,le=200),offset: int=Query(0,ge=0),q: str=Query('',max_length=160),sort: str=Query('priority',pattern='^(priority|newest)$')):
+    sessions=store.sessions(limit,offset,q,sort)
     totals=store.event_counts([s['id'] for s in sessions])
-    items=[{**clean_session(s),**totals[s['id']]} for s in sessions]
+    summaries=store.review_summaries([s['id'] for s in sessions])
+    items=[{**clean_session(s),**totals[s['id']],'review':summaries[s['id']]} for s in sessions]
     with store.lock:
         counts={r[0]:r[1] for r in store.db.execute('SELECT status,count(*) FROM sessions GROUP BY status')}
         pattern='%'+q.replace('\\','\\\\').replace('%','\\%').replace('_','\\_')+'%'
@@ -1522,6 +1529,7 @@ def _ingest_packet(raw, device_id="",parsed=None,staged=None,installed=None):
                 else:path.write_bytes(encrypt(blob,media_key))
                 store.db.execute('UPDATE events SET media=? WHERE id=?',(media,eid))
         store.update_anchor(sid, total, previous)
+        store.refresh_review(sid,total)
         store.db.commit()
     return {"ok": True, "stop": False, **lease_state(store.session(sid)), "anchor": {"count": total, "head": previous}}
 

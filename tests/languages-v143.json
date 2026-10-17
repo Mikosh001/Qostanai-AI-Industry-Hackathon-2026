@@ -1,13 +1,13 @@
 {
   "passed": true,
-  "version": "1.4.3",
+  "version": "1.5.0",
   "languages": [
     "kk",
     "ru",
     "en"
   ],
-  "firstOrigin": "http://127.0.0.1:61190",
-  "secondOrigin": "http://127.0.0.1:63135",
+  "firstOrigin": "http://127.0.0.1:51852",
+  "secondOrigin": "http://127.0.0.1:53657",
   "packaged": true,
   "savedAcrossRestart": true,
   "activeSessionAndAnswerPreserved": true,

@@ -1,0 +1,307 @@
+{
+  "date": "2026-10-15",
+  "publication": "Local candidate only; GitHub not updated",
+  "automated": {
+    "python": {
+      "passed": 211,
+      "failed": 0
+    },
+    "desktop": {
+      "passed": 66,
+      "failed": 0
+    },
+    "browser": {
+      "passed": 17,
+      "failed": 0
+    }
+  },
+  "native": {
+    "passed": true,
+    "scope": "Own isolated windows, synthetic security states and temporary files; global restrictions not activated",
+    "checks": [
+      "guard rules and launcher topology",
+      "window classification",
+      "application window closure",
+      "touchpad recovery state machine",
+      "antivirus status and resource integrity"
+    ]
+  },
+  "moodle": {
+    "passed": true,
+    "moodle": "4.5.15",
+    "plugin": "quizaccess_sergek",
+    "signedIdentity": true,
+    "portalLogin": true,
+    "automaticallyOpenedFromSelectedQuiz": true,
+    "loginRetainedDuringHandoff": true,
+    "noStudentModeOrUrlOrTeacherPassword": true,
+    "automaticDemoBootstrap": false,
+    "automaticallyReleasedAfterMoodleSubmission": true,
+    "attemptSubmitted": true,
+    "protectionDeferredUntilAttempt": true,
+    "studentFeedbackVisibleBelowNativeMoodle": true,
+    "startupMilliseconds": 5644,
+    "persistedStart": "2026-10-15T10:25:38.168564+00:00",
+    "persistedEnd": "2026-10-15T10:27:29.088937+00:00",
+    "slowQuiz": true,
+    "firstProtectedPageUsableWithoutReload": true,
+    "serverGating": true,
+    "blockedResourcesAndWindowsAuditOnly": true,
+    "camera": "disabled administrative software test profile"
+  },
+  "phone": {
+    "scope": "Offline fixed one-second windows from one previously human-labelled operator recording; not real-time latency or population accuracy",
+    "scenarios": [
+      {
+        "group": "back/full",
+        "phone_visible_seconds": 1,
+        "events": [
+          {
+            "kind": "phone_brief",
+            "time": 2,
+            "duration": 0
+          }
+        ],
+        "saved": true,
+        "false_events": 0
+      },
+      {
+        "group": "front/hand_occlusion",
+        "phone_visible_seconds": 1,
+        "events": [
+          {
+            "kind": "phone_brief",
+            "time": 2.5,
+            "duration": 0.5
+          }
+        ],
+        "saved": true,
+        "false_events": 0
+      },
+      {
+        "group": "front/bottom_partial",
+        "phone_visible_seconds": 1,
+        "events": [
+          {
+            "kind": "phone_brief",
+            "time": 2.5,
+            "duration": 0.5
+          }
+        ],
+        "saved": true,
+        "false_events": 0
+      },
+      {
+        "group": "back/bottom_partial",
+        "phone_visible_seconds": 1,
+        "events": [
+          {
+            "kind": "phone_brief",
+            "time": 2.5,
+            "duration": 0.5
+          }
+        ],
+        "saved": true,
+        "false_events": 0
+      }
+    ],
+    "full_recording_groups": {
+      "back/full": {
+        "episodes": 1,
+        "detected_episodes": 1
+      },
+      "front/hand_occlusion": {
+        "episodes": 1,
+        "detected_episodes": 1
+      },
+      "front/bottom_partial": {
+        "episodes": 1,
+        "detected_episodes": 1
+      },
+      "back/bottom_partial": {
+        "episodes": 1,
+        "detected_episodes": 1
+      }
+    },
+    "full_recording_false_events": 0
+  },
+  "hub": {
+    "date": "2026-10-15",
+    "scope": "HTTPS protocol-2 synthetic load. No physical camera, OS guard or PHP load.\n\nUses independent driver processes and persistent connections. The test owns its\ntemporary hub, keys and database, and never touches a university or demo session.\n",
+    "students": 100,
+    "duration_per_client_seconds": 32,
+    "elapsed_seconds": 38.02,
+    "drivers": 4,
+    "initial_events_per_session": 10,
+    "lease_period_seconds": 2,
+    "ramp_seconds": 4.0,
+    "errors": [],
+    "synthetic_evidence_bytes_per_30_seconds": 32768,
+    "backend_sha256": "db751163a59287159fefb587787b804096928b5b629a7b4e5f176585d67bf889",
+    "driver_sha256": "1b035db3129e87dd19ee5ed54d3c0aa575fc2ad557d60365a5feea3a60ad4e86",
+    "stale": 0,
+    "completed": 100,
+    "hub_rss_mb": {
+      "first": 84.6,
+      "peak": 113.7,
+      "last": 109.6
+    },
+    "requests": {
+      "ingest": 300,
+      "lease": 1600,
+      "status": 1600
+    },
+    "latency_ms": {
+      "ingest": {
+        "p50": 9.22,
+        "p95": 27.14,
+        "p99": 49.34
+      },
+      "lease": {
+        "p50": 8.34,
+        "p95": 21.23,
+        "p99": 37.23
+      },
+      "status": {
+        "p50": 4.77,
+        "p95": 14.52,
+        "p99": 25.53
+      }
+    },
+    "server_processing_ms": {
+      "p50": 2.27,
+      "p95": 11.41,
+      "p99": 21.5
+    },
+    "machine": {
+      "logical_cpus": 20,
+      "ram_gb": 15.7
+    },
+    "persisted_completed": 100,
+    "integrity_failures": 0,
+    "review_metrics_failures": 0,
+    "review_queue_sessions": 100,
+    "passed": true
+  },
+  "package": {
+    "passed": true,
+    "version": "1.7.0",
+    "scope": "packaged application",
+    "resourceFiles": 1185,
+    "resourceBytes": 552498117,
+    "checks": [
+      "desktop/main.cjs",
+      "desktop/focus-recovery.cjs",
+      "desktop/start-flow.cjs",
+      "desktop/guard-events.cjs",
+      "desktop/policy.cjs",
+      "desktop/navigation.cjs",
+      "desktop/preload.cjs",
+      "desktop/runtime-security.cjs",
+      "desktop/bootstrap-integrity.cjs",
+      "desktop/resource-manifest.json",
+      "guard/Sergek.Guard.exe",
+      "guard/Sergek.Guard.dll",
+      "backend/sergek-backend.exe",
+      "ui/index.html",
+      "ui/assets/index-BtwoZRU0.css",
+      "ui/assets/index-Cnl5PMbM.js"
+    ]
+  },
+  "installed_package": {
+    "passed": true,
+    "version": "1.7.0",
+    "scope": "installed application",
+    "resourceFiles": 1185,
+    "resourceBytes": 552498117,
+    "checks": [
+      "desktop/main.cjs",
+      "desktop/focus-recovery.cjs",
+      "desktop/start-flow.cjs",
+      "desktop/guard-events.cjs",
+      "desktop/policy.cjs",
+      "desktop/navigation.cjs",
+      "desktop/preload.cjs",
+      "desktop/runtime-security.cjs",
+      "desktop/bootstrap-integrity.cjs",
+      "desktop/resource-manifest.json",
+      "guard/Sergek.Guard.exe",
+      "guard/Sergek.Guard.dll",
+      "backend/sergek-backend.exe",
+      "ui/index.html",
+      "ui/assets/index-BtwoZRU0.css",
+      "ui/assets/index-Cnl5PMbM.js"
+    ]
+  },
+  "installed_startup": {
+    "passed": true,
+    "health": {
+      "ok": true,
+      "version": "1.7.0",
+      "setup_required": false
+    },
+    "models_ready": true,
+    "strict_policy_preserved": true,
+    "derived_queue_available": true,
+    "queue_sessions": 24,
+    "camera_and_OS_guard": "not activated; live operator acceptance remains separate"
+  },
+  "installed_ui": {
+    "passed": true,
+    "installedBundle": true,
+    "jsonCollapsedByDefault": true,
+    "priorityOrderDefault": true,
+    "explanationAndScaleVisible": true
+  },
+  "manual_acceptance": "Pending: live brief phone, gaze warning/threshold, active OS restrictions, five-question finish and restriction restoration on the target laptop",
+  "source_sha256": {
+    "backend/__init__.py": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+    "backend/app.py": "99c79a94ee8c466f9bdc9ee3f538fb564c3afa1cd9ddc0c22bb706557f0752f6",
+    "backend/audio.py": "ed3fc689b2cdd7433888bce9a7b6698e09ee0693d06a23eedee112c206133efe",
+    "backend/config.py": "364a04e4d516d63465bdde2692aa01b9ffa5b1ba90b63230e67fbaf0498e5c2e",
+    "backend/demo.py": "84a4a7b4559a9a0212574d77f584cd71ada445ce44cb5962c735860e67fd7c44",
+    "backend/engine.py": "4b78d8c06a41bb95621077969f9f7724f837e3cbc765d31482e49aaf62c7b379",
+    "backend/event_policy.py": "5216ef25c9b2d0ff2e0886b957c983ff17ef6198f474183143288f05626d66e3",
+    "backend/evidence_validation.py": "8ca50ef11fb4027617ddd53936f432c7e9f07cfdcadceb8107780e8df3670688",
+    "backend/hub_validation.py": "6ef6787dd74ae138094ffa7cf037460c688798e7fdd83bad245cce8957d8e607",
+    "backend/identity.py": "b72d5f61d3bb8f744e873cdf40c83d237407c043ac5467edf095f7304ed4e6db",
+    "backend/liveness.py": "7b587cc1613346fb018090f8643569cb4c588c5426882951da3cc812b371253b",
+    "backend/report_i18n.py": "8ba88777744eb2ff014e036839d658a20238c4c59edb61a19046fc52ffb020c6",
+    "backend/reports.py": "8a489e8e1e611bc1ab526479587bbe4addc5158800963400c2718d573bf161c8",
+    "backend/request_limits.py": "00bf7e694d12986c1b3aa693f71d450c74c4026bd9fa13e67675ad4b37d1d11d",
+    "backend/review_priority.py": "a1e11defe7d0c11396a63655b2df86dd8a7e4f11b946e0b5cbaaf4fe350a3e1a",
+    "backend/run.py": "bda3700e7b909d47ea0ff8bcb5ee2e1abdaf79f3309de73a77f8a8a560a09dd7",
+    "backend/security.py": "0fc28c5828a1db5bf4f39b80406096f5d870dc036a10b44b59cdf7834cdeb9a9",
+    "backend/signed_export.py": "94898679dffa439aca7cc2822eaab94142d19bb523c354228bae25797e59e67d",
+    "backend/speech.py": "2dbde42f8682b1b58357bfd0641d8d087245b8e060a329d04f224402cd7df359",
+    "backend/storage_budget.py": "4e42107f2c54cb5fa8114fc5e85a6bbc219eea59b22068f7a9212e6e0346dee7",
+    "backend/store.py": "b8c88f1dd82a1971453af62306305becc26c40391d25cb06389eaed283b1b751",
+    "backend/sync_protocol.py": "0668fcc4ca106cf112f7fc626bec418bb26cea29cf86df7a19c92da1c146474d",
+    "backend/trust.py": "c09bca4a32864431d623967f028e30801cd5fa3549a0cef67816d155f4893268",
+    "backend/vision.py": "ca1ed60f258fc632a381d1bc9e01337b3b53db19c03318c0e8a2c7bd4e6ada36",
+    "desktop/bootstrap-integrity.cjs": "8e8ccd9cec37182a52d474d54b29b5c6c1ead3dcd451cea54c9e3f1d5aa06bcb",
+    "desktop/focus-recovery.cjs": "341398943a6d14d0919a1cc5c7e0313c1b6ec6fb27bed1accef0b0785b1613b5",
+    "desktop/guard-events.cjs": "9967c05215ecf56c9614097601414ef45d06031c7f6d5d257198aedf35dae015",
+    "desktop/main.cjs": "006ae50545fd390b52a78cad3d62c378219477529d1a32ef067b2f057fe30a79",
+    "desktop/moodle-ready.cjs": "fbaa369c2a01de2468da9b80854215ed4d6a6ef3f76620e3b8c634356bf3321b",
+    "desktop/navigation.cjs": "48a41568ee9156da4485b89fc62ad6bb839cd18665c4ffc342dd1fe86efbe9f3",
+    "desktop/policy.cjs": "4c59b16f066d4eff3382c1c21af03482cf777f8361c2b043dbc884dbb52cade5",
+    "desktop/preload.cjs": "cbad7862e3835a9bba3f118bfc98273d66ea69aef0ac612d1e0efff823e8075b",
+    "desktop/runtime-security.cjs": "75cd407cc42858d2b2681ab16c53d320349017a0cb7271f41f4cb75b5f93b200",
+    "desktop/start-flow.cjs": "b5faf794efe816c6e7802d0f9e806bedda24164c121045ebb584bcc27d8e2124",
+    "guard/AntimalwareGuard.cs": "c2bc572ff7eb09ccb6475acdbcb367a4a5b34ed161e0a55f4d7250de9539ebb5",
+    "guard/EnvironmentGuard.cs": "1e804282c75e93eb47af7d94b314558df54c005ca90356e7e5c836552639d127",
+    "guard/GestureRegression.cs": "89d128ce1b4c1f24f5e16d59ec3823b6634047a1209b2ba9be1c3948076563cc",
+    "guard/Program.cs": "5b058d6663d593611d4fbc2a766fb609ef7beb0182631bd882b888746aa141c1",
+    "guard/ResourceIntegrity.cs": "ae4d2a2f876faf61d96c9773e374ba1130b70676ae3598523da97c4640b700d8",
+    "guard/SecurityRegression.cs": "d253ec4dde2f20147e459e48218bccf530f06198df9c3ceec3f8179109b140a4",
+    "guard/StorageValidation.cs": "692ddb9cd983087544cbdab00f22aeaa5db53ac476988f8d7fbeb885cb9fa85e",
+    "guard/TouchpadGuard.cs": "2f31fe2137af7027b3c74a0df5be7eee6f9fc6a41d93afa16429e5d1774ac3e1",
+    "guard/WindowRegression.cs": "dc5e23b7ce773e196330f1dbe88e5ac12d2a4258459d565c62a8dad6931fe096",
+    "ui/i18n.tsx": "24d8fd6e70b0022391784030ae1f6973c46083a785b1a8d7f893c5783a525e6b",
+    "ui/main.tsx": "82b92d9870a88dfa47ca9c8086cc4a477a0d619088f969f2fb99335732b605c0",
+    "ui/styles.css": "139b386f76873190cef58608181dd129a839dd1c85afe1e216fd304a9a2f54fa",
+    "ui/messages.json": "d959d8507b7c8e7849c2fd340c97449b47a557692ea25c74be3d66cf541356cb",
+    "package.json": "37c16b2e0fdfcac206455d05bcf180e0ef17c3daf5482161db7844593a00d312"
+  }
+}

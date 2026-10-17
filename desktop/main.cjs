@@ -33,6 +33,7 @@ if (unsafeStartup.length) {
 const { allowedUrl, blockedInput } = require("./policy.cjs");
 const { startProtectedExam } = require("./start-flow.cjs");
 const { createFocusRecovery } = require("./focus-recovery.cjs");
+const { shouldInterruptForGuardFailure } = require("./guard-events.cjs");
 const root = path.join(__dirname, "..");
 let window,
   examView,
@@ -323,7 +324,10 @@ function startGuard() {
           );
         }
         await record(message.kind, message.detail);
-        if (fatal) await interrupt(message.kind);
+        // A preparation failure releases Windows restrictions in start-flow and
+        // keeps the same photo/Moodle login for retry. It is not a stopped exam.
+        if (fatal && shouldInterruptForGuardFailure(current?.session))
+          await interrupt(message.kind);
       } else if (message.error) log("guard: " + message.error);
     } catch (error) {
       log(error.message);
@@ -351,7 +355,12 @@ function layoutExam() {
     x: 0,
     y: 76,
     width,
-    height: Math.max(0, height - 76),
+    height: Math.max(
+      0,
+      height -
+        76 -
+        (examView && current?.session.status === "active" ? 112 : 0),
+    ),
   });
 }
 function configureSession(isolated) {
@@ -1076,6 +1085,10 @@ ipcMain.handle("sergek:command", async (event, command, value) => {
   }
   if (command === "start") {
     if (current.session.data.platform === "moodle") {
+      // A failed preparation keeps its session/photo. Clear the old failure only
+      // when explicitly reopening Moodle, before a new Start attempt transaction.
+      if (current.session.status === "preflight" && !starting)
+        guardFailure = "";
       await openExam();
       return current.session;
     }

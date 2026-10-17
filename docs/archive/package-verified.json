@@ -1,0 +1,25 @@
+{
+  "passed": true,
+  "version": "1.8.0",
+  "scope": "packaged application",
+  "resourceFiles": 1185,
+  "resourceBytes": 552510365,
+  "checks": [
+    "desktop/main.cjs",
+    "desktop/focus-recovery.cjs",
+    "desktop/start-flow.cjs",
+    "desktop/guard-events.cjs",
+    "desktop/policy.cjs",
+    "desktop/navigation.cjs",
+    "desktop/preload.cjs",
+    "desktop/runtime-security.cjs",
+    "desktop/bootstrap-integrity.cjs",
+    "desktop/resource-manifest.json",
+    "guard/Sergek.Guard.exe",
+    "guard/Sergek.Guard.dll",
+    "backend/sergek-backend.exe",
+    "ui/index.html",
+    "ui/assets/index-BCLl_7Rc.css",
+    "ui/assets/index-ZkgZgv_V.js"
+  ]
+}
