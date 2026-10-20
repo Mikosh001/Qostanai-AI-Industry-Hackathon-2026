@@ -1,3 +1,5 @@
+![Sergek — Qostanai Industry Hackathon 2026 participation certificate](docs/images/qostanai-industry-hackathon-2026-certificate.jpg)
+
 # Sergек Proctor
 
 **Локальный прокторинг и защищённая среда экзамена для университетов**  
